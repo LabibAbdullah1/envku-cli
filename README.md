@@ -53,11 +53,11 @@ Jika Anda sudah mengompilasi binary di komputer lokal:
 1. **Kompilasi binary untuk Linux di komputer lokal:**
    * Di Git Bash / Linux / macOS:
      ```bash
-     GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o envku cmd/envku/main.go
+     GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o envku ./cmd/envku
      ```
    * Di Windows PowerShell:
      ```powershell
-     $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o envku cmd/envku/main.go
+     $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o envku ./cmd/envku
      ```
 
 2. **Upload binary ke server VPS menggunakan SCP:**
@@ -85,7 +85,7 @@ git clone https://github.com/LabibAbdullah1/envku-cli.git
 cd envku-cli
 
 # 2. Build binary
-go build -ldflags="-s -w" -o envku cmd/envku/main.go
+go build -ldflags="-s -w" -o envku ./cmd/envku
 
 # 3. Pindahkan ke direktori bin & daftarkan daemon
 sudo mv envku /usr/local/bin/

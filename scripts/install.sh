@@ -50,7 +50,7 @@ else
     echo "[-] Warning: No pre-compiled release found yet. Checking if Go is installed to compile from source..."
     if command -v go >/dev/null 2>&1; then
       echo "[+] Building binary with Go..."
-      go build -ldflags="-s -w" -o "$TARGET_BIN" cmd/envku/main.go
+      go build -ldflags="-s -w" -o "$TARGET_BIN" ./cmd/envku
     else
       echo "[-] Error: Release binary not found and Go is not installed."
       exit 1
