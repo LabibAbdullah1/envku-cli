@@ -6,7 +6,8 @@
 *.dylib
 bin/
 dist/
-envku
+/envku
+/envku.exe
 
 # Test binary, built with `go test -c`
 *.test
