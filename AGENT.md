@@ -7,7 +7,7 @@ You are an expert Senior Backend & Systems Engineer acting as the Lead AI Coding
 Envku CLI is a single-binary command-line and background daemon tool for Linux (Ubuntu/Debian) designed to eliminate manual, tedious server configurations. It provides an interactive Terminal UI (TUI) and automation workflows for:
 1. **One-Line Bootstrap Installation (`install.sh` via Systemd)**
 2. **Interactive TUI Dashboard & Menus (powered by Go)**
-3. **App & Package Downloader (Nginx, Apache, MySQL, PHP 8.2-8.5, Redis, NVM/Node.js)**
+3. **App & Package Downloader (Nginx, MySQL, PHP 8.2-8.5, Redis, NVM/Node.js)**
 4. **PHP Extension & `php.ini` Tweak Manager**
 5. **Automated Site Manager (Virtual Host / Server Block generator & Certbot SSL integration)**
 6. **Service Lifecycle & Log Controller**
@@ -39,7 +39,7 @@ envku-cli/
 ├── internal/
 │   ├── config/             # Global path configurations & settings
 │   ├── daemon/             # Systemd background service handlers
-│   ├── installer/          # Package managers (Nginx, Apache, MySQL, PHP, Redis, NVM)
+│   ├── installer/          # Package managers (Nginx, MySQL, PHP, Redis, NVM)
 │   ├── phpmanager/         # php.ini parser, extension togglers, FPM reloaders
 │   ├── sitemanager/        # Virtual Host automator & Certbot SSL integration
 │   ├── servicectl/         # Service start/stop/restart & log streamer

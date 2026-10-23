@@ -1,0 +1,148 @@
+================================================================================
+                       ENVKU CLI - PROJECT PROGRESS & HANDOVER
+================================================================================
+Generated Date : 2026-10-23
+Project Name   : Envku CLI (Lightweight Linux/VPS Server Environment Manager)
+Language/Stack : Go (Golang 1.22+), Pure ANSI TUI, Systemd Integration
+Target System  : Linux (Ubuntu 20.04/22.04/24.04, Debian 11/12, WSL 2)
+Author / Owner : LabibAbdullah1
+Repository     : github.com/LabibAbdullah1/envku-cli
+
+================================================================================
+[1] EXECUTIVE SUMMARY & STATUS
+================================================================================
+Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI FITUR INTI (~95%).
+Semua modul logika sistem, template virtual host, kontrol service systemd,
+dan antarmuka TUI interaktif telah dibuat dan terintegrasi penuh.
+
+Binary ini bersifat single-binary, zero runtime dependency, dan siap di-compile
+secara cross-platform (dari Windows ke Linux amd64/arm64).
+
+================================================================================
+[2] FITUR-FITUR YANG SUDAH SELESAI DIIMPLEMENTASIKAN
+================================================================================
+
+1. ARSITEKTUR & BOILERPLATE DASAR
+   - [x] Inisialisasi Go Module: github.com/LabibAbdullah1/envku-cli (go 1.22).
+   - [x] Pembersihan ketergantungan Apache (Fokus murni ke Nginx berkinerja tinggi).
+   - [x] Pipeline CI/CD GitHub Actions (.github/workflows/build.yml) untuk cross-compile
+         otomatis arsitektur Linux amd64 dan arm64.
+   - [x] Skrip instalasi satu baris (scripts/install.sh) dengan auto-detect arsitektur,
+         download binary, dan auto-registrasi daemon Systemd.
+   - [x] Dukungan build multi-OS (system_linux.go dan system_other.go) sehingga bisa
+         di-build dan ditest di Windows tanpa error compile.
+
+2. APP & PACKAGE DOWNLOADER (internal/installer/)
+   - [x] Eksekusi aman non-interaktif (DEBIAN_FRONTEND=noninteractive).
+   - [x] Nginx Web Server: Instalasi via apt, syntax check 'nginx -t', enable systemd.
+   - [x] MySQL Server: Instalasi 'mysql-server', aktivasi service systemd.
+   - [x] Redis Cache Server: Menggunakan repositori resmi Redis (packages.redis.io)
+         dengan GPG keyring resmi agar server mendapatkan Redis versi terbaru (v7+).
+   - [x] PHP Multi-Version: Repositori resmi Ondrej Sury (PPA Ubuntu / sury Debian)
+         mendukung versi PHP 8.2, 8.3, 8.4, dan 8.5 lengkap dengan FPM dan ekstensi
+         esensial (pdo_mysql, mbstring, curl, gd, zip, bcmath, intl, redis, xml, opcache).
+   - [x] Node.js & NVM: Bootstrap NVM v0.40.1 dan auto-install Node.js LTS terkini.
+
+3. PHP MANAGER (internal/phpmanager/)
+   - [x] Parser php.ini membaca nilai aktif: memory_limit, upload_max_filesize,
+         post_max_size, max_execution_time, max_input_vars, date.timezone.
+   - [x] Mekanisme Keamanan Atomic Update:
+         * Auto-backup file php.ini (php.ini.bak.YYYYMMDD_HHMMSS) sebelum diubah.
+         * Validasi sintaks 'php-fpm<version> -t' setelah diedit.
+         * Auto-rollback otomatis jika hasil uji sintaks FPM gagal.
+         * Auto-reload service php-fpm jika sintaks valid.
+   - [x] Ekstensi PHP: Scanner modul aktif dan fungsi toggle on/off menggunakan
+         utilitas standar 'phpenmod' / 'phpdismod' dengan target versi (-v <version>).
+
+4. SITE MANAGER / VIRTUAL HOST & SSL (internal/sitemanager/)
+   - [x] Template Generator Nginx Server Block (/etc/nginx/sites-available/):
+         * PHP-FPM: Fastcgi socket unix /run/php/php<ver>-fpm.sock, security headers,
+           caching asset statis, upload limit 64M, gzip compression.
+         * Node.js Reverse Proxy: Forwarding WebSocket (Upgrade/Connection),
+           X-Real-IP, X-Forwarded-For, target port lokal dinamis.
+         * Static SPA: Routing HTML5/Vue/React SPA 'try_files $uri $uri/ /index.html;'.
+   - [x] Siklus Hidup Virtual Host: Create, Enable (symlink ke sites-enabled),
+         Disable, dan Delete.
+   - [x] Validasi 'nginx -t' sebelum setiap reload; rollback instan jika konfigurasi error.
+   - [x] Certbot SSL: Integrasi otomatis 'certbot --nginx' untuk penerbitan dan
+         pemasangan sertifikat HTTPS gratis dari Let's Encrypt (1-klik).
+
+5. SERVICE LIFECYCLE CONTROLLER & LOGS (internal/servicectl/)
+   - [x] Kontrol systemctl: start, stop, restart, reload, enable, disable.
+   - [x] Batch Status Discovery: Memeriksa sekaligus status Nginx, MySQL, Redis,
+         semua versi PHP-FPM, dan daemon Envku.
+   - [x] Log Inspector: Membaca N baris log terakhir via 'journalctl -u <unit> -n 40 --no-pager'
+         dan helper tailing file log fisik (/var/log/nginx/, /var/log/mysql/).
+
+6. BACKGROUND DAEMON & WATCHDOG (internal/daemon/)
+   - [x] Generator Unit Systemd (/etc/systemd/system/envku.service).
+   - [x] CLI Subcommands:
+         * 'envku daemon install'   -> Daftarkan dan aktifkan service systemd
+         * 'envku daemon uninstall' -> Matikan dan hapus service
+         * 'envku daemon run'       -> Jalankan loop watchdog di foreground
+   - [x] Watchdog Loop: Periodic health check setiap 60 detik untuk mendeteksi servis mati.
+
+7. INTERACTIVE TERMINAL UI (internal/tui/)
+   - [x] Real-time Dashboard: Membaca CPU Model, RAM Usage (MB dan %), Uptime dari /proc.
+   - [x] Badges status servis aktif/mati secara visual.
+   - [x] Menu Interaktif Package Downloader, PHP Manager, Site Wizard, dan Service Controller.
+
+================================================================================
+[3] CARA MENJALANKAN & MENGUJI
+================================================================================
+
+A. DI WINDOWS (Git Bash / WSL / CMD):
+   1. Menjalankan TUI lokal:
+      go run cmd/envku/main.go
+
+   2. Cross-compile binary untuk Linux VPS dari Git Bash:
+      GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o envku cmd/envku/main.go
+
+   3. Cross-compile binary untuk Linux VPS dari PowerShell:
+      $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o envku cmd/envku/main.go
+
+B. DI SERVER LINUX / VPS / WSL 2:
+   1. Install langsung via bootstrap script:
+      sudo bash scripts/install.sh
+
+   2. Atau jalankan binary langsung:
+      sudo ./envku
+
+================================================================================
+[4] REKOMENDASI FITUR PENGEMBANGAN BERIKUTNYA (FUTURE ROADMAP)
+================================================================================
+
+Bagi AI Agent atau Developer yang melanjutkan project ini, berikut daftar fitur
+yang sangat direkomendasikan untuk ditambahkan ke tahap berikutnya:
+
+1. DATABASE MANAGER WIZARD:
+   - Fitur wizard interaktif untuk membuat database MySQL baru, membuat user baru,
+     dan memberikan hak akses (GRANT ALL PRIVILEGES) secara otomatis tanpa harus
+     masuk ke prompt SQL manual.
+
+2. FIREWALL (UFW) CONTROLLER:
+   - Modul 'internal/firewall/' untuk mengelola UFW (Uncomplicated Firewall):
+     Membuka port 80 (HTTP), 443 (HTTPS), 22 (SSH), 3306 (MySQL), 6379 (Redis),
+     dan mengaktifkan proteksi rate-limiting.
+
+3. POSTGRESQL SUPPORT:
+   - Menambahkan opsi database PostgreSQL disamping MySQL di modul 'internal/installer/database.go'.
+
+4. AUTOMATIC DATABASE & WEB BACKUP (CRON SCHEDULER):
+   - Modul backup terjadwal untuk meng-dump database MySQL (mysqldump) dan mengompresi
+     direktori /var/www/<domain> ke format tar.gz, lalu disimpan lokal atau diunggah
+     ke S3/Google Drive / SFTP remote.
+
+5. REST API & HEADLESS DAEMON MODE:
+   - Membuka lightweight internal HTTP/JSON API (misal port 9876 dengan token auth)
+     pada daemon Envku sehingga status server dan kontrol servis bisa diakses dari
+     web dashboard atau aplikasi mobile.
+
+6. CHARM TUI UPGRADE (BUBBLETEA & LIPGLOSS):
+   - Meningkatkan antarmuka terminal dari pure ANSI saat ini menjadi visual TUI modern
+     menggunakan Charm.sh (Bubbletea, Lipgloss, Bubbles) dengan layout box, tabel,
+     dan color palette yang lebih elegan.
+
+================================================================================
+DOKUMEN INI ADALAH SINGLE SOURCE OF TRUTH (SSOT) UNTUK STATUS & HANDOVER PROYEK.
+================================================================================
