@@ -14,37 +14,47 @@ func NewPHPInstaller() *PHPInstaller {
 	return &PHPInstaller{}
 }
 
-// SetupRepository adds the Ondřej Surý PHP repository
+// SetupRepository adds the official Ondřej Surý PHP repository (supports Debian & Ubuntu, including Ubuntu 26.04 Resolute)
 func (p *PHPInstaller) SetupRepository() error {
 	osInfo, err := DetectOS()
-	if err != nil {
-		// Fallback to PPA if detection fails
-		return EnsurePPA("ppa:ondrej/php")
+	codename := ""
+	if err == nil {
+		codename = osInfo.Codename
 	}
 
-	switch osInfo.ID {
-	case "debian":
-		// Debian repository setup
-		packages := []string{"apt-transport-https", "lsb-release", "ca-certificates", "curl"}
-		if err := AptInstall(packages...); err != nil {
-			return err
+	if codename == "" {
+		if out, err := exec.Command("lsb_release", "-sc").Output(); err == nil {
+			codename = strings.TrimSpace(string(out))
 		}
-		// Fetch GPG key
-		cmdGPG := "curl -sSLo /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg"
-		if err := exec.Command("bash", "-c", cmdGPG).Run(); err != nil {
-			return fmt.Errorf("failed to fetch sury debian gpg key: %w", err)
-		}
-		// Add sources.list
-		cmdRepo := `echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list`
-		if err := exec.Command("bash", "-c", cmdRepo).Run(); err != nil {
-			return fmt.Errorf("failed to write sury debian php.list: %w", err)
-		}
-		return AptUpdate()
-	case "ubuntu":
-		return EnsurePPA("ppa:ondrej/php")
-	default:
-		return EnsurePPA("ppa:ondrej/php")
 	}
+
+	// Fallback codename if undetected
+	if codename == "" {
+		codename = "noble"
+	}
+
+	// 1. Clean up legacy or broken Launchpad PPA entries that fail on newer Ubuntu suites (e.g. resolute)
+	cleanCmd := "rm -f /etc/apt/sources.list.d/*ondrej* /etc/apt/sources.list.d/php.list 2>/dev/null || true"
+	_ = exec.Command("bash", "-c", cleanCmd).Run()
+
+	// 2. Install prerequisites
+	packages := []string{"apt-transport-https", "ca-certificates", "curl", "lsb-release"}
+	_ = AptInstall(packages...)
+
+	// 3. Fetch canonical Sury GPG key
+	_ = exec.Command("mkdir", "-p", "/etc/apt/keyrings", "/etc/apt/trusted.gpg.d").Run()
+	cmdGPG := "curl -sSLo /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && cp /etc/apt/trusted.gpg.d/php.gpg /etc/apt/keyrings/sury-php.gpg 2>/dev/null || true"
+	if err := exec.Command("bash", "-c", cmdGPG).Run(); err != nil {
+		return fmt.Errorf("failed to fetch sury php gpg key: %w", err)
+	}
+
+	// 4. Write canonical repository to /etc/apt/sources.list.d/php.list
+	cmdRepo := fmt.Sprintf(`echo "deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg] https://packages.sury.org/php/ %s main" > /etc/apt/sources.list.d/php.list`, codename)
+	if err := exec.Command("bash", "-c", cmdRepo).Run(); err != nil {
+		return fmt.Errorf("failed to write php.list: %w", err)
+	}
+
+	return AptUpdate()
 }
 
 // InstallVersion installs PHP and essential extensions for the specified version (e.g. "8.2", "8.3", "8.4", "8.5")

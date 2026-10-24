@@ -14,6 +14,7 @@ type DistroInfo struct {
 	ID        string
 	VersionID string
 	Name      string
+	Codename  string
 }
 
 // DetectOS parses /etc/os-release to detect Linux distribution details
@@ -34,6 +35,10 @@ func DetectOS() (*DistroInfo, error) {
 			info.VersionID = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), `"`)
 		} else if strings.HasPrefix(line, "NAME=") {
 			info.Name = strings.Trim(strings.TrimPrefix(line, "NAME="), `"`)
+		} else if strings.HasPrefix(line, "VERSION_CODENAME=") {
+			info.Codename = strings.Trim(strings.TrimPrefix(line, "VERSION_CODENAME="), `"`)
+		} else if strings.HasPrefix(line, "UBUNTU_CODENAME=") && info.Codename == "" {
+			info.Codename = strings.Trim(strings.TrimPrefix(line, "UBUNTU_CODENAME="), `"`)
 		}
 	}
 
