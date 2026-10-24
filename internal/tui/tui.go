@@ -45,7 +45,7 @@ func Run() error {
 		fmt.Println("[1] 📊 Refresh Dashboard")
 		fmt.Println("[2] 📦 App & Package Downloader (Nginx, MySQL, Redis, PHP, Node)")
 		fmt.Println("[3] ⚙️ PHP Manager (php.ini Tweaks & Extensions)")
-		fmt.Println("[4] 🌐 Site Manager (Virtual Host & Certbot SSL)")
+		fmt.Println("[4] 🖥️ Site Manager (Virtual Host & Certbot SSL)")
 		fmt.Println("[5] ⚡ Service Manager (systemctl & Log Inspector)")
 		if cachedUpdateInfo != nil && cachedUpdateInfo.Available {
 			fmt.Printf("[U] 🚀 Update Envku CLI ke v%s [UPDATE READY]\n", cachedUpdateInfo.LatestVersion)
