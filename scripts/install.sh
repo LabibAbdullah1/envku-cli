@@ -45,19 +45,23 @@ elif [ -f "./envku" ]; then
   cp "./envku" "$TARGET_BIN"
 else
   echo "[+] Fetching latest release binary from GitHub ($REPO)..."
-  LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*$BIN_NAME" | cut -d '"' -f 4)
-  if [ -z "$LATEST_URL" ]; then
-    echo "[-] Warning: No pre-compiled release found yet. Checking if Go is installed to compile from source..."
-    if command -v go >/dev/null 2>&1; then
-      echo "[+] Building binary with Go..."
-      go build -ldflags="-s -w" -o "$TARGET_BIN" ./cmd/envku
-    else
-      echo "[-] Error: Release binary not found and Go is not installed."
-      exit 1
-    fi
+  DIRECT_URL="https://github.com/$REPO/releases/latest/download/$BIN_NAME"
+  if curl -fsSL "$DIRECT_URL" -o "$TARGET_BIN" 2>/dev/null; then
+    echo "[+] Downloaded $BIN_NAME from $DIRECT_URL"
   else
-    echo "[+] Downloading from $LATEST_URL..."
-    curl -fsSL "$LATEST_URL" -o "$TARGET_BIN"
+    LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*$BIN_NAME" | cut -d '"' -f 4)
+    if [ -n "$LATEST_URL" ] && curl -fsSL "$LATEST_URL" -o "$TARGET_BIN"; then
+      echo "[+] Downloaded $BIN_NAME from $LATEST_URL"
+    else
+      echo "[-] Warning: No pre-compiled release found on GitHub. Checking if Go is installed to compile from source..."
+      if command -v go >/dev/null 2>&1; then
+        echo "[+] Building binary with Go..."
+        go build -ldflags="-s -w" -o "$TARGET_BIN" ./cmd/envku
+      else
+        echo "[-] Error: Release binary not found on GitHub and Go is not installed."
+        exit 1
+      fi
+    fi
   fi
 fi
 
