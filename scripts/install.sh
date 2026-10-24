@@ -100,5 +100,5 @@ fi
 
 echo "=================================================="
 echo "  [SUCCESS] Envku CLI installation complete!      "
-echo "  Launch the manager anytime by typing: envku     "
+echo "  Launch the manager anytime by typing: sudo envku     "
 echo "=================================================="
