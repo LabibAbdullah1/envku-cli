@@ -31,7 +31,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VER="${GITHUB_REF#refs/tags/v}"
           else
-            VER="1.0.0"
+            VER="1.0.1"
           fi
           echo "APP_VER=$VER" >> $GITHUB_ENV
 
