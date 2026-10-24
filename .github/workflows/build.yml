@@ -26,13 +26,22 @@ jobs:
       - name: Create dist directory
         run: mkdir -p dist
 
+      - name: Determine Version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF#refs/tags/v}"
+          else
+            VER="1.0.0"
+          fi
+          echo "APP_VER=$VER" >> $GITHUB_ENV
+
       - name: Build Linux amd64
         run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/envku-linux-amd64 ./cmd/envku
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-linux-amd64 ./cmd/envku
 
       - name: Build Linux arm64
         run: |
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/envku-linux-arm64 ./cmd/envku
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-linux-arm64 ./cmd/envku
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
