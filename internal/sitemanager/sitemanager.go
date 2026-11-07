@@ -99,6 +99,16 @@ func (m *Manager) CreateSite(cfg SiteConfig) error {
 		if err := os.MkdirAll(docRoot, 0755); err != nil {
 			return fmt.Errorf("failed to create document root directory %s: %w", docRoot, err)
 		}
+
+		// Ensure starter index file exists so Nginx doesn't return 403 Forbidden
+		if err := EnsureStarterFile(cfg, docRoot); err != nil {
+			fmt.Printf("[!] Warning: could not create starter file: %v\n", err)
+		}
+
+		// Set directory ownership to www-data and permissions 755
+		baseDir := fmt.Sprintf("/var/www/%s", cfg.Domain)
+		_ = exec.Command("chown", "-R", "www-data:www-data", baseDir).Run()
+		_ = exec.Command("chmod", "-R", "755", baseDir).Run()
 	}
 
 	availFile := filepath.Join(config.NginxSitesAvail, cfg.Domain+".conf")
@@ -128,6 +138,26 @@ func (m *Manager) CreateSite(cfg SiteConfig) error {
 	// Reload web server
 	if err := m.ReloadNginx(); err != nil {
 		return err
+	}
+
+	// Verify PHP-FPM socket if it's a PHP site
+	if cfg.Type == SiteTypePHP {
+		phpVer := cfg.PHPVersion
+		if phpVer == "" {
+			phpVer = "8.3"
+		}
+		sockPath := fmt.Sprintf("/run/php/php%s-fpm.sock", phpVer)
+		if _, err := os.Stat(sockPath); os.IsNotExist(err) {
+			// Try starting the service in case it's installed but stopped
+			serviceName := fmt.Sprintf("php%s-fpm", phpVer)
+			_ = exec.Command("systemctl", "start", serviceName).Run()
+			if _, errAfter := os.Stat(sockPath); os.IsNotExist(errAfter) {
+				fmt.Printf("\n[!] PERINGATAN: Socket PHP-FPM tidak ditemukan di %s\n", sockPath)
+				fmt.Printf("    Layanan PHP %s-FPM belum terpasang atau belum berjalan.\n", phpVer)
+				fmt.Println("    Jika situs dibuka di browser sekarang, Nginx akan menampilkan '502 Bad Gateway'.")
+				fmt.Printf("    -> Solusi: Pasang PHP %s melalui Menu [2] Install & Manage Stack.\n\n", phpVer)
+			}
+		}
 	}
 
 	// Auto-resolve to /etc/hosts for local development if requested or if domain is local
@@ -275,3 +305,208 @@ func (m *Manager) ListSites() ([]SiteInfo, error) {
 
 	return sites, nil
 }
+
+// EnsureStarterFile generates a default welcome index file if document root is empty
+func EnsureStarterFile(cfg SiteConfig, docRoot string) error {
+	if cfg.Type == SiteTypePHP {
+		indexPath := filepath.Join(docRoot, "index.php")
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			return os.WriteFile(indexPath, []byte(defaultPHPIndex), 0644)
+		}
+	} else if cfg.Type == SiteTypeStatic {
+		indexPath := filepath.Join(docRoot, "index.html")
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			return os.WriteFile(indexPath, []byte(defaultStaticIndex), 0644)
+		}
+	}
+	return nil
+}
+
+const defaultPHPIndex = `<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'Envku App') ?> - Envku CLI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .container {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 620px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .badge {
+            display: inline-block;
+            background: #0284c7;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        h1 {
+            font-size: 1.75rem;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+        p {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .info-box {
+            background: #1f2937;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #374151;
+            font-size: 0.9rem;
+        }
+        .row:last-child {
+            border-bottom: none;
+        }
+        .row .label {
+            color: #9ca3af;
+        }
+        .row .value {
+            font-family: monospace;
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        .status-ok {
+            color: #22c55e !important;
+        }
+        .note {
+            background: #0f172a;
+            border-left: 4px solid #38bdf8;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            border-radius: 0 8px 8px 0;
+            line-height: 1.5;
+        }
+        .note code {
+            color: #f59e0b;
+            font-family: monospace;
+        }
+        .footer {
+            margin-top: 28px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="badge">&#10003; Berhasil Dikonfigurasi</span>
+        <h1>Selamat Datang di <?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'Envku') ?>!</h1>
+        <p>Virtual Host Nginx Anda telah berhasil dibuat dan aktif berjalan melalui <strong>Envku CLI</strong>.</p>
+        
+        <div class="info-box">
+            <div class="row">
+                <span class="label">Status Server:</span>
+                <span class="value status-ok">&#9679; Online</span>
+            </div>
+            <div class="row">
+                <span class="label">Versi PHP Aktif:</span>
+                <span class="value">PHP <?= phpversion() ?></span>
+            </div>
+            <div class="row">
+                <span class="label">Web Server:</span>
+                <span class="value"><?= htmlspecialchars($_SERVER['SERVER_SOFTWARE'] ?? 'Nginx') ?></span>
+            </div>
+            <div class="row">
+                <span class="label">Document Root:</span>
+                <span class="value"><?= htmlspecialchars(__DIR__) ?></span>
+            </div>
+            <div class="row">
+                <span class="label">Waktu Server:</span>
+                <span class="value"><?= date('Y-m-d H:i:s T') ?></span>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>Langkah Selanjutnya:</strong> Letakkan source code project Anda (Laravel, WordPress, atau PHP kustom) di dalam folder <code><?= htmlspecialchars(__DIR__) ?></code>.
+        </div>
+
+        <div class="footer">Envku CLI &bull; Local &amp; Production Server Manager</div>
+    </div>
+</body>
+</html>`
+
+const defaultStaticIndex = `<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envku CLI - Static Site</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .container {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 620px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .badge {
+            display: inline-block;
+            background: #0284c7;
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        h1 { font-size: 1.75rem; color: #ffffff; margin-bottom: 12px; }
+        p { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px; }
+        .footer { margin-top: 28px; text-align: center; font-size: 0.8rem; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="badge">&#10003; Situs Statis Aktif</span>
+        <h1>Situs Statis Berhasil Dibuat</h1>
+        <p>Virtual Host Nginx Anda telah siap. Silakan letakkan file HTML, CSS, JavaScript, atau build SPA React/Vue Anda di direktori ini.</p>
+        <div class="footer">Envku CLI &bull; Local &amp; Production Server Manager</div>
+    </div>
+</body>
+</html>`

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/LabibAbdullah1/envku-cli/internal/config"
+	"github.com/LabibAbdullah1/envku-cli/internal/installer"
 	"github.com/LabibAbdullah1/envku-cli/internal/sitemanager"
 )
 
@@ -224,6 +225,25 @@ func wizardNewSite(mgr *sitemanager.Manager, reader *bufio.Reader) {
 		docRoot = strings.TrimSpace(rootStr)
 	default:
 		siteType = sitemanager.SiteTypePHP
+		phpInst := installer.NewPHPInstaller()
+		installedPHP := []string{}
+		for _, v := range installer.SupportedPHPVersions {
+			st := phpInst.Status(v)
+			if st.Installed {
+				if st.Active {
+					installedPHP = append(installedPHP, v+" (aktif)")
+				} else {
+					installedPHP = append(installedPHP, v)
+				}
+			}
+		}
+
+		if len(installedPHP) > 0 {
+			fmt.Printf("   PHP Terdeteksi di Sistem: %s\n", strings.Join(installedPHP, ", "))
+		} else {
+			fmt.Println("   [!] Catatan: PHP belum terpasang. Anda perlu memasang PHP di Menu [2] agar situs tidak '502 Bad Gateway'.")
+		}
+
 		fmt.Print("   Enter PHP Version [8.2, 8.3, 8.4, 8.5] (default 8.3): ")
 		verStr, _ := reader.ReadString('\n')
 		verStr = strings.TrimSpace(verStr)
