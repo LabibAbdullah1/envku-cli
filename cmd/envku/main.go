@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/LabibAbdullah1/envku-cli/internal/config"
 	"github.com/LabibAbdullah1/envku-cli/internal/daemon"
+	"github.com/LabibAbdullah1/envku-cli/internal/firewall"
+	"github.com/LabibAbdullah1/envku-cli/internal/installer"
 	"github.com/LabibAbdullah1/envku-cli/internal/tui"
 	"github.com/LabibAbdullah1/envku-cli/internal/updater"
 )
@@ -17,6 +20,12 @@ func main() {
 		switch args[0] {
 		case "daemon":
 			handleDaemon(args[1:])
+			return
+		case "mode", "env":
+			handleMode(args[1:])
+			return
+		case "pma", "phpmyadmin":
+			handlePMA(args[1:])
 			return
 		case "update":
 			handleUpdate()
@@ -38,6 +47,94 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error running Envku CLI: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func handleMode(subArgs []string) {
+	cfg := config.GetConfig()
+
+	if len(subArgs) == 0 {
+		fmt.Printf("Current Environment Mode: %s\n", strings.ToUpper(string(cfg.Environment)))
+		if cfg.Environment == config.ModeLocal {
+			fmt.Println("Profile: Local Development (Linux Desktop / Laptop / WSL)")
+			fmt.Println("Browser: Local browser direct access enabled")
+		} else {
+			fmt.Println("Profile: Production Server (VPS / Cloud)")
+			fmt.Println("Security: Strict firewall and public IP access rules enabled")
+		}
+		fmt.Println("\nTo switch mode: sudo envku mode [local|production]")
+		return
+	}
+
+	target := strings.ToLower(subArgs[0])
+	fw := firewall.New()
+
+	switch target {
+	case "local", "dev", "development":
+		if err := config.SetEnvironment(config.ModeLocal); err != nil {
+			fmt.Fprintf(os.Stderr, "[-] Failed to set local mode: %v\n", err)
+			os.Exit(1)
+		}
+		_ = fw.ApplyLocalProfile(cfg.PMAPort)
+		fmt.Println("[+] Successfully switched to Mode: LOCAL DEVELOPMENT")
+		fmt.Println("    • phpMyAdmin and local sites will open directly in local browser")
+		fmt.Println("    • Relaxed developer firewall profile active")
+	case "prod", "production", "server", "vps":
+		if err := config.SetEnvironment(config.ModeProduction); err != nil {
+			fmt.Fprintf(os.Stderr, "[-] Failed to set production mode: %v\n", err)
+			os.Exit(1)
+		}
+		_ = fw.ApplyProductionProfile(cfg.PMAPort, cfg.AllowedAdminIPs)
+		fmt.Println("[+] Successfully switched to Mode: PRODUCTION SERVER (VPS)")
+		fmt.Println("    • Strict UFW firewall profile enforced")
+		fmt.Println("    • phpMyAdmin access restricted to IP whitelist / SSH tunnel")
+	default:
+		fmt.Printf("Unknown environment mode: %s. Use 'local' or 'production'.\n", target)
+		os.Exit(1)
+	}
+}
+
+func handlePMA(subArgs []string) {
+	pma := installer.NewPHPMyAdminInstaller()
+	cfg := config.GetConfig()
+
+	if len(subArgs) == 0 || subArgs[0] == "status" {
+		st := pma.Status()
+		fmt.Printf("phpMyAdmin Status: %s\n", renderBadgeCli(st.Installed, st.Version))
+		fmt.Printf("Environment Mode : %s\n", strings.ToUpper(string(cfg.Environment)))
+		if st.Installed {
+			fmt.Printf("Access URL       : %s\n", pma.GetAccessURL())
+		}
+		return
+	}
+
+	switch subArgs[0] {
+	case "open", "browser":
+		if !pma.IsInstalled() {
+			fmt.Println("[-] phpMyAdmin is not installed. Run 'sudo envku' -> menu [6] to install.")
+			os.Exit(1)
+		}
+		fmt.Println("[*] Opening phpMyAdmin in default browser...")
+		if err := pma.OpenInBrowser(); err != nil {
+			fmt.Fprintf(os.Stderr, "[-] Could not open browser: %v\n", err)
+			fmt.Printf("    Open manually at: %s\n", pma.GetAccessURL())
+			os.Exit(1)
+		}
+		fmt.Println("[+] Opened successfully.")
+	case "url":
+		fmt.Println(pma.GetAccessURL())
+	default:
+		fmt.Println("Usage: envku pma [status|open|url]")
+	}
+}
+
+func renderBadgeCli(installed bool, version string) string {
+	if installed {
+		if version != "" {
+			return fmt.Sprintf("INSTALLED (v%s)", version)
+		}
+		return "INSTALLED"
+	}
+	return "NOT INSTALLED"
 }
 
 func handleCheckUpdate() {
@@ -121,6 +218,8 @@ func printHelp() {
 	fmt.Printf("%s - Lightweight Linux & VPS Environment Manager (v%s)\n\n", config.AppName, config.AppVersion)
 	fmt.Println("Usage:")
 	fmt.Println("  envku                  Launch the interactive Terminal UI (TUI)")
+	fmt.Println("  envku mode [local|prod]View or switch environment mode (Local vs Production)")
+	fmt.Println("  envku pma [open|status]Manage or open phpMyAdmin in local desktop browser")
 	fmt.Println("  envku update           Update Envku CLI to the latest release")
 	fmt.Println("  envku check-update     Check if a newer version is available")
 	fmt.Println("  envku daemon install   Register and enable the Systemd background service")

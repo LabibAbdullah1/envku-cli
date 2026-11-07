@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Envku CLI - One-line Bootstrap Installer for Ubuntu/Debian VPS
+# Envku CLI - Bootstrap Installer for Ubuntu/Debian Linux (VPS & Local PC)
 set -e
 
 echo "=================================================="
@@ -11,6 +11,54 @@ if [ "$EUID" -ne 0 ]; then
   echo "[-] Error: Please run as root (e.g. sudo bash install.sh)"
   exit 1
 fi
+
+# Parse CLI flags for unattended installation
+CHOSEN_MODE=""
+for arg in "$@"; do
+  case $arg in
+    --prod|--production)
+      CHOSEN_MODE="production"
+      ;;
+    --local|--dev)
+      CHOSEN_MODE="local"
+      ;;
+  esac
+done
+
+# If mode is not passed via CLI flag, ask interactively
+if [ -z "$CHOSEN_MODE" ]; then
+  # Determine if an interactive tty is available (even when piped through curl | sudo bash)
+  TTY_SRC=""
+  if [ -t 0 ]; then
+    TTY_SRC="/dev/stdin"
+  elif [ -r /dev/tty ]; then
+    TTY_SRC="/dev/tty"
+  fi
+
+  if [ -n "$TTY_SRC" ]; then
+    echo ""
+    echo "Pilih Lingkungan Penggunaan (Target Environment):"
+    echo "  [1] 🌐 Production Server (VPS / Cloud - Proteksi firewall ketat, akses via IP/Domain)"
+    echo "  [2] 💻 Local Development (Komputer / Laptop Linux Pribadi, WSL - Browser lokal & phpMyAdmin)"
+    echo ""
+    printf "Pilihan Anda [1-2] (default: 1): "
+    read -r USER_CHOICE < "$TTY_SRC" || USER_CHOICE="1"
+    USER_CHOICE=$(echo "$USER_CHOICE" | tr -d '[:space:]')
+    case "$USER_CHOICE" in
+      2|local|dev)
+        CHOSEN_MODE="local"
+        ;;
+      *)
+        CHOSEN_MODE="production"
+        ;;
+    esac
+  else
+    # Non-interactive automated default
+    CHOSEN_MODE="production"
+  fi
+fi
+
+echo "[+] Target Environment Mode: $(echo "$CHOSEN_MODE" | tr '[:lower:]' '[:upper:]')"
 
 # Detect Architecture
 ARCH=$(uname -m)
@@ -82,13 +130,12 @@ else
   fi
 fi
 
-if [ "$RESTART_SERVICE" -eq 1 ]; then
-  echo "[+] Restarting Envku background daemon..."
-  systemctl start envku 2>/dev/null || true
-fi
-
 chmod +x "$TARGET_BIN"
 echo "[+] Binary successfully installed at $TARGET_BIN"
+
+# Set configured environment mode
+echo "[*] Configuring environment mode: $CHOSEN_MODE..."
+"$TARGET_BIN" mode "$CHOSEN_MODE" || true
 
 # Register & Enable Background Systemd Daemon
 echo "[+] Registering Envku Systemd background service..."
@@ -98,7 +145,23 @@ else
   echo "[!] Note: Daemon could not be automatically registered (systemd might not be active in containers/WSL1)."
 fi
 
+if [ "$RESTART_SERVICE" -eq 1 ]; then
+  echo "[+] Restarting Envku background daemon..."
+  systemctl start envku 2>/dev/null || true
+fi
+
 echo "=================================================="
 echo "  [SUCCESS] Envku CLI installation complete!      "
-echo "  Launch the manager anytime by typing: sudo envku     "
+if [ "$CHOSEN_MODE" = "local" ]; then
+  echo "  Mode: 💻 LOCAL DEVELOPMENT (PC / Desktop / Laptop)"
+  echo "  • phpMyAdmin siap dipasang & dibuka di browser lokal"
+  echo "  • Virtual Host lokal (.test) otomatis dipetakan ke /etc/hosts"
+else
+  echo "  Mode: 🌐 PRODUCTION SERVER (VPS / Cloud)"
+  echo "  • Proteksi firewall UFW aktif untuk keamanan VPS"
+  echo "  • phpMyAdmin dibatasi firewall & IP Whitelist"
+  echo "  • Akses wajib melalui IP Publik VPS atau Domain terarah"
+fi
+echo "--------------------------------------------------"
+echo "  Launch the manager anytime by typing: sudo envku"
 echo "=================================================="

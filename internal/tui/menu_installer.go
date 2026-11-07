@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/LabibAbdullah1/envku-cli/internal/config"
 	"github.com/LabibAbdullah1/envku-cli/internal/installer"
 )
 
 func runInstallerMenu(inst *installer.Installer, reader *bufio.Reader) {
 	for {
 		clearScreen()
+		cfg := config.GetConfig()
+
 		fmt.Println("==================================================")
 		fmt.Println("       📦 App & Package Downloader / Manager      ")
 		fmt.Println("==================================================")
@@ -19,16 +22,28 @@ func runInstallerMenu(inst *installer.Installer, reader *bufio.Reader) {
 		mysqlSt := inst.MySQL.Status()
 		redisSt := inst.Redis.Status()
 		nodeSt := inst.Node.Status()
+		pmaSt := inst.PMA.Status()
 
 		fmt.Printf("[1] Nginx Web Server      : %s\n", renderBadge(nginxSt.Installed, nginxSt.Version))
 		fmt.Printf("[2] MySQL Database        : %s\n", renderBadge(mysqlSt.Installed, mysqlSt.Version))
 		fmt.Printf("[3] Redis In-Memory Cache : %s\n", renderBadge(redisSt.Installed, redisSt.Version))
 		fmt.Printf("[4] Node.js & NVM         : %s\n", renderBadge(nodeSt.Installed, nodeSt.Version))
 		fmt.Println("[5] PHP Multi-Version Installer (8.2, 8.3, 8.4, 8.5)")
+
+		pmaBadge := renderBadge(pmaSt.Installed, pmaSt.Version)
+		if pmaSt.Installed {
+			if cfg.Environment == config.ModeLocal {
+				pmaBadge += " (http://localhost:8080)"
+			} else {
+				pmaBadge += " (🛡️ Firewall Protected)"
+			}
+		}
+		fmt.Printf("[6] phpMyAdmin Web GUI    : %s\n", pmaBadge)
+
 		fmt.Println("--------------------------------------------------")
 		fmt.Println("[0] Back to Main Menu")
 		fmt.Println("==================================================")
-		fmt.Print("Select option [0-5]: ")
+		fmt.Print("Select option [0-6]: ")
 
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
@@ -68,6 +83,8 @@ func runInstallerMenu(inst *installer.Installer, reader *bufio.Reader) {
 			waitEnter(reader)
 		case "5":
 			runPHPInstallSubmenu(inst.PHP, reader)
+		case "6":
+			runPHPMyAdminMenu(inst.PMA, reader)
 		case "0":
 			return
 		}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/LabibAbdullah1/envku-cli/internal/config"
 	"github.com/LabibAbdullah1/envku-cli/internal/sitemanager"
 )
 
@@ -14,9 +15,21 @@ func runSiteMenu(reader *bufio.Reader) {
 
 	for {
 		clearScreen()
+		cfg := config.GetConfig()
+
 		fmt.Println("==================================================")
 		fmt.Println("       🌐 Site Manager (Virtual Host & SSL)       ")
 		fmt.Println("==================================================")
+		if cfg.Environment == config.ModeLocal {
+			fmt.Println(" Mode: 💻 LOCAL (Domain *.test & localhost supported)")
+		} else {
+			serverIP := cfg.ServerIP
+			if serverIP == "" {
+				serverIP = config.DetectPublicIP()
+			}
+			fmt.Printf(" Mode: 🌐 PRODUCTION VPS (IP: %s)\n", serverIP)
+		}
+		fmt.Println("--------------------------------------------------")
 
 		sites, err := mgr.ListSites()
 		if err != nil {
@@ -33,15 +46,22 @@ func runSiteMenu(reader *bufio.Reader) {
 				if s.HasSSL {
 					sslBadge = "[HTTPS]"
 				}
-				fmt.Printf("[%d] %s %s %-20s (Type: %s)\n", i+1, statusBadge, sslBadge, s.Domain, s.Type)
+				locBadge := ""
+				if s.IsLocal {
+					locBadge = "[LOCAL]"
+				}
+				fmt.Printf("[%d] %s %s %s %-20s (Type: %s)\n", i+1, statusBadge, sslBadge, locBadge, s.Domain, s.Type)
 			}
 		}
 
 		fmt.Println("--------------------------------------------------")
 		fmt.Println("[A] Add New Site (Wizard)")
+		if config.CanOpenBrowser() {
+			fmt.Println("[O] Buka Domain di Browser Lokal (xdg-open)")
+		}
 		fmt.Println("[E] Enable a Site")
 		fmt.Println("[D] Disable a Site")
-		fmt.Println("[S] Issue / Renew Certbot SSL")
+		fmt.Println("[S] Issue / Renew Certbot SSL (Production FQDN only)")
 		fmt.Println("[X] Delete a Site")
 		fmt.Println("[0] Back to Main Menu")
 		fmt.Println("==================================================")
@@ -53,6 +73,19 @@ func runSiteMenu(reader *bufio.Reader) {
 		switch choice {
 		case "A":
 			wizardNewSite(mgr, reader)
+		case "O":
+			fmt.Print("Masukkan nama domain yang ingin dibuka di browser: ")
+			dom, _ := reader.ReadString('\n')
+			dom = strings.TrimSpace(dom)
+			if dom != "" {
+				fmt.Printf("[*] Membuka %s di browser lokal...\n", dom)
+				if err := mgr.OpenSiteInBrowser(dom); err != nil {
+					fmt.Printf("[-] Gagal membuka browser: %v\n", err)
+				} else {
+					fmt.Printf("[+] Halaman %s telah dibuka di browser!\n", dom)
+				}
+				waitEnter(reader)
+			}
 		case "E":
 			fmt.Print("Enter domain to enable: ")
 			dom, _ := reader.ReadString('\n')
@@ -81,10 +114,17 @@ func runSiteMenu(reader *bufio.Reader) {
 			fmt.Print("Enter domain to install SSL: ")
 			dom, _ := reader.ReadString('\n')
 			dom = strings.TrimSpace(dom)
-			fmt.Print("Enter email for Let's Encrypt (optional): ")
-			email, _ := reader.ReadString('\n')
-			email = strings.TrimSpace(email)
 			if dom != "" {
+				if sitemanager.IsLocalDomain(dom) {
+					fmt.Printf("[-] Domain '%s' adalah domain lokal/testing. Let's Encrypt hanya mendukung domain publik FQDN yang terdaftar di DNS publik.\n", dom)
+					waitEnter(reader)
+					continue
+				}
+
+				fmt.Print("Enter email for Let's Encrypt (optional): ")
+				email, _ := reader.ReadString('\n')
+				email = strings.TrimSpace(email)
+
 				fmt.Printf("\n[*] Requesting Certbot SSL for %s...\n", dom)
 				if err := mgr.RequestSSL(dom, email); err != nil {
 					fmt.Printf("[-] Error: %v\n", err)
@@ -117,17 +157,42 @@ func runSiteMenu(reader *bufio.Reader) {
 
 func wizardNewSite(mgr *sitemanager.Manager, reader *bufio.Reader) {
 	clearScreen()
+	cfg := config.GetConfig()
+
 	fmt.Println("==================================================")
 	fmt.Println("          🪄 New Virtual Host Setup Wizard         ")
 	fmt.Println("==================================================")
 
-	fmt.Print("1. Enter Domain / Subdomain (e.g. app.example.com): ")
+	exampleDomain := "myapp.example.com"
+	if cfg.Environment == config.ModeLocal {
+		exampleDomain = "myapp.test"
+		fmt.Println(" [TIPS LOCAL]: Gunakan domain berakhiran .test (contoh: proyekku.test)")
+		fmt.Println("               Aplikasi akan otomatis mendaftarkannya ke /etc/hosts")
+	} else {
+		serverIP := cfg.ServerIP
+		if serverIP == "" {
+			serverIP = config.DetectPublicIP()
+		}
+		fmt.Println(" [TIPS PROD]: Pastikan domain sudah memiliki A-Record DNS yang")
+		fmt.Printf("              mengarah ke IP VPS Anda: %s\n", serverIP)
+	}
+	fmt.Println("--------------------------------------------------")
+
+	fmt.Printf("1. Enter Domain / Subdomain (e.g. %s): ", exampleDomain)
 	domain, _ := reader.ReadString('\n')
 	domain = strings.TrimSpace(domain)
 	if domain == "" {
 		fmt.Println("[-] Domain cannot be empty.")
 		waitEnter(reader)
 		return
+	}
+
+	addToHosts := false
+	if cfg.Environment == config.ModeLocal || sitemanager.IsLocalDomain(domain) {
+		fmt.Printf("   Tambahkan %s ke /etc/hosts (127.0.0.1) otomatis? [Y/n]: ", domain)
+		ans, _ := reader.ReadString('\n')
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		addToHosts = (ans == "" || ans == "y" || ans == "yes")
 	}
 
 	fmt.Println("\n2. Select Application Type:")
@@ -170,17 +235,22 @@ func wizardNewSite(mgr *sitemanager.Manager, reader *bufio.Reader) {
 		docRoot = strings.TrimSpace(rootStr)
 	}
 
-	fmt.Print("\n3. Automatically request Let's Encrypt SSL now? (y/N): ")
-	sslInput, _ := reader.ReadString('\n')
-	wantSSL := strings.ToLower(strings.TrimSpace(sslInput)) == "y"
+	wantSSL := false
 	sslEmail := ""
-	if wantSSL {
-		fmt.Print("   Enter admin email for SSL renewal alerts: ")
-		emailStr, _ := reader.ReadString('\n')
-		sslEmail = strings.TrimSpace(emailStr)
+
+	// SSL only offered if not local testing domain and in production mode
+	if cfg.Environment == config.ModeProduction && !sitemanager.IsLocalDomain(domain) {
+		fmt.Print("\n3. Automatically request Let's Encrypt SSL now? (y/N): ")
+		sslInput, _ := reader.ReadString('\n')
+		wantSSL = strings.ToLower(strings.TrimSpace(sslInput)) == "y"
+		if wantSSL {
+			fmt.Print("   Enter admin email for SSL renewal alerts: ")
+			emailStr, _ := reader.ReadString('\n')
+			sslEmail = strings.TrimSpace(emailStr)
+		}
 	}
 
-	cfg := sitemanager.SiteConfig{
+	siteCfg := sitemanager.SiteConfig{
 		Domain:        domain,
 		Type:          siteType,
 		DocumentRoot:  docRoot,
@@ -188,13 +258,26 @@ func wizardNewSite(mgr *sitemanager.Manager, reader *bufio.Reader) {
 		NodeProxyPort: nodePort,
 		EnableSSL:     wantSSL,
 		SSLEmail:      sslEmail,
+		AddToHosts:    addToHosts,
 	}
 
 	fmt.Println("\n[*] Creating and activating Nginx virtual host...")
-	if err := mgr.CreateSite(cfg); err != nil {
+	if err := mgr.CreateSite(siteCfg); err != nil {
 		fmt.Printf("[-] Setup failed: %v\n", err)
 	} else {
 		fmt.Printf("[+] Virtual Host for %s successfully created and active!\n", domain)
+		if addToHosts {
+			fmt.Printf("[+] %s telah dipetakan ke 127.0.0.1 di /etc/hosts\n", domain)
+		}
+
+		if config.CanOpenBrowser() {
+			fmt.Print("\nBuka situs baru di browser lokal sekarang? [Y/n]: ")
+			openNow, _ := reader.ReadString('\n')
+			openNow = strings.ToLower(strings.TrimSpace(openNow))
+			if openNow == "" || openNow == "y" || openNow == "yes" {
+				_ = mgr.OpenSiteInBrowser(domain)
+			}
+		}
 	}
 	waitEnter(reader)
 }

@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+// IsLocalDomain checks if a domain is a local/reserved testing domain
+func IsLocalDomain(domain string) bool {
+	d := strings.ToLower(strings.TrimSpace(domain))
+	return d == "localhost" ||
+		d == "127.0.0.1" ||
+		strings.HasSuffix(d, ".test") ||
+		strings.HasSuffix(d, ".local") ||
+		strings.HasSuffix(d, ".internal") ||
+		strings.HasSuffix(d, ".example") ||
+		!strings.Contains(d, ".")
+}
+
 // EnsureCertbotInstalled checks if Certbot and the Nginx plugin are installed, installing if necessary
 func (m *Manager) EnsureCertbotInstalled() error {
 	if _, err := exec.LookPath("certbot"); err == nil {
@@ -27,6 +39,10 @@ func (m *Manager) EnsureCertbotInstalled() error {
 
 // RequestSSL issues a Let's Encrypt SSL certificate using certbot --nginx
 func (m *Manager) RequestSSL(domain, email string) error {
+	if IsLocalDomain(domain) {
+		return fmt.Errorf("Let's Encrypt SSL memerlukan domain publik (FQDN) dengan DNS aktif. Domain lokal '%s' tidak dapat dipasang SSL publik", domain)
+	}
+
 	if err := m.EnsureCertbotInstalled(); err != nil {
 		return err
 	}

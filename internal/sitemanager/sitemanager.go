@@ -30,6 +30,7 @@ type SiteConfig struct {
 	NodeProxyPort int      `json:"node_port,omitempty"`
 	EnableSSL     bool     `json:"enable_ssl"`
 	SSLEmail      string   `json:"ssl_email,omitempty"`
+	AddToHosts    bool     `json:"add_to_hosts,omitempty"` // Local /etc/hosts resolution
 }
 
 // SiteInfo represents discovered metadata of an existing site
@@ -41,6 +42,7 @@ type SiteInfo struct {
 	NodeProxyPort int      `json:"node_port,omitempty"`
 	Enabled       bool     `json:"enabled"`
 	HasSSL        bool     `json:"has_ssl"`
+	IsLocal       bool     `json:"is_local"`
 }
 
 // Manager controls Nginx Virtual Host configurations and SSL lifecycles
@@ -128,10 +130,19 @@ func (m *Manager) CreateSite(cfg SiteConfig) error {
 		return err
 	}
 
-	// Optional SSL setup via Certbot
+	// Auto-resolve to /etc/hosts for local development if requested or if domain is local
+	if cfg.AddToHosts || IsLocalDomain(cfg.Domain) {
+		_ = EnsureHostsEntry(cfg.Domain)
+	}
+
+	// Optional SSL setup via Certbot (Production only)
 	if cfg.EnableSSL {
-		if err := m.RequestSSL(cfg.Domain, cfg.SSLEmail); err != nil {
-			return fmt.Errorf("site created, but SSL setup failed: %w", err)
+		if IsLocalDomain(cfg.Domain) {
+			fmt.Printf("[!] Note: SSL Let's Encrypt dilewati karena %s adalah domain lokal.\n", cfg.Domain)
+		} else {
+			if err := m.RequestSSL(cfg.Domain, cfg.SSLEmail); err != nil {
+				return fmt.Errorf("site created, but SSL setup failed: %w", err)
+			}
 		}
 	}
 
@@ -175,14 +186,25 @@ func (m *Manager) DisableSite(domain string) error {
 	return m.ReloadNginx()
 }
 
-// DeleteSite completely removes site configuration files
+// DeleteSite completely removes site configuration files and hosts entries
 func (m *Manager) DeleteSite(domain string) error {
 	_ = m.DisableSite(domain)
 	availFile := filepath.Join(config.NginxSitesAvail, domain+".conf")
 	if err := os.Remove(availFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete configuration file %s: %w", availFile, err)
 	}
+	_ = RemoveHostsEntry(domain)
 	return m.ReloadNginx()
+}
+
+// OpenSiteInBrowser opens the site URL in the default local desktop browser
+func (m *Manager) OpenSiteInBrowser(domain string) error {
+	scheme := "http"
+	if m.HasSSL(domain) {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s", scheme, domain)
+	return config.OpenBrowser(url)
 }
 
 // ListSites discovers all sites in sites-available and their current status
@@ -247,6 +269,7 @@ func (m *Manager) ListSites() ([]SiteInfo, error) {
 			NodeProxyPort: proxyPort,
 			Enabled:       isEnabled,
 			HasSSL:        m.HasSSL(domain),
+			IsLocal:       IsLocalDomain(domain),
 		})
 	}
 

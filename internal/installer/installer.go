@@ -8,6 +8,7 @@ const (
 	ComponentMySQL   Component = "mysql"
 	ComponentRedis   Component = "redis"
 	ComponentNodeNVM Component = "node-nvm"
+	ComponentPMA     Component = "phpmyadmin"
 )
 
 // SupportedPHPVersions defines the modern supported PHP versions
@@ -28,6 +29,7 @@ type Installer struct {
 	MySQL *MySQLInstaller
 	Redis *RedisInstaller
 	Node  *NodeInstaller
+	PMA   *PHPMyAdminInstaller
 }
 
 // New creates and initializes an Installer instance with all sub-installers
@@ -38,5 +40,6 @@ func New() *Installer {
 		MySQL: NewMySQLInstaller(),
 		Redis: NewRedisInstaller(),
 		Node:  NewNodeInstaller(),
+		PMA:   NewPHPMyAdminInstaller(),
 	}
 }

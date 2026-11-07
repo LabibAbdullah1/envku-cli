@@ -1,147 +1,91 @@
 ================================================================================
                        ENVKU CLI - PROJECT PROGRESS & HANDOVER
 ================================================================================
-Generated Date : 2026-10-23
+Generated Date : 2026-11-07
 Project Name   : Envku CLI (Lightweight Linux/VPS Server Environment Manager)
-Language/Stack : Go (Golang 1.22+), Pure ANSI TUI, Systemd Integration
-Target System  : Linux (Ubuntu 20.04/22.04/24.04, Debian 11/12, WSL 2)
+Language/Stack : Go (Golang 1.22+), Pure ANSI TUI, Systemd Integration, UFW Firewall
+Target System  : Linux (Ubuntu 20.04/22.04/24.04, Debian 11/12, WSL 2, Desktop Linux)
 Author / Owner : LabibAbdullah1
 Repository     : github.com/LabibAbdullah1/envku-cli
 
 ================================================================================
 [1] EXECUTIVE SUMMARY & STATUS
 ================================================================================
-Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI FITUR INTI (~95%).
-Semua modul logika sistem, template virtual host, kontrol service systemd,
-dan antarmuka TUI interaktif telah dibuat dan terintegrasi penuh.
-
-Binary ini bersifat single-binary, zero runtime dependency, dan siap di-compile
-secara cross-platform (dari Windows ke Linux amd64/arm64).
-
-================================================================================
-[2] FITUR-FITUR YANG SUDAH SELESAI DIIMPLEMENTASIKAN
-================================================================================
-
-1. ARSITEKTUR & BOILERPLATE DASAR
-   - [x] Inisialisasi Go Module: github.com/LabibAbdullah1/envku-cli (go 1.22).
-   - [x] Pembersihan ketergantungan Apache (Fokus murni ke Nginx berkinerja tinggi).
-   - [x] Pipeline CI/CD GitHub Actions (.github/workflows/build.yml) untuk cross-compile
-         otomatis arsitektur Linux amd64 dan arm64.
-   - [x] Skrip instalasi satu baris (scripts/install.sh) dengan auto-detect arsitektur,
-         download binary, dan auto-registrasi daemon Systemd.
-   - [x] Dukungan build multi-OS (system_linux.go dan system_other.go) sehingga bisa
-         di-build dan ditest di Windows tanpa error compile.
-
-2. APP & PACKAGE DOWNLOADER (internal/installer/)
-   - [x] Eksekusi aman non-interaktif (DEBIAN_FRONTEND=noninteractive).
-   - [x] Nginx Web Server: Instalasi via apt, syntax check 'nginx -t', enable systemd.
-   - [x] MySQL Server: Instalasi 'mysql-server', aktivasi service systemd.
-   - [x] Redis Cache Server: Menggunakan repositori resmi Redis (packages.redis.io)
-         dengan GPG keyring resmi agar server mendapatkan Redis versi terbaru (v7+).
-   - [x] PHP Multi-Version: Repositori resmi Ondrej Sury (PPA Ubuntu / sury Debian)
-         mendukung versi PHP 8.2, 8.3, 8.4, dan 8.5 lengkap dengan FPM dan ekstensi
-         esensial (pdo_mysql, mbstring, curl, gd, zip, bcmath, intl, redis, xml, opcache).
-   - [x] Node.js & NVM: Bootstrap NVM v0.40.1 dan auto-install Node.js LTS terkini.
-
-3. PHP MANAGER (internal/phpmanager/)
-   - [x] Parser php.ini membaca nilai aktif: memory_limit, upload_max_filesize,
-         post_max_size, max_execution_time, max_input_vars, date.timezone.
-   - [x] Mekanisme Keamanan Atomic Update:
-         * Auto-backup file php.ini (php.ini.bak.YYYYMMDD_HHMMSS) sebelum diubah.
-         * Validasi sintaks 'php-fpm<version> -t' setelah diedit.
-         * Auto-rollback otomatis jika hasil uji sintaks FPM gagal.
-         * Auto-reload service php-fpm jika sintaks valid.
-   - [x] Ekstensi PHP: Scanner modul aktif dan fungsi toggle on/off menggunakan
-         utilitas standar 'phpenmod' / 'phpdismod' dengan target versi (-v <version>).
-
-4. SITE MANAGER / VIRTUAL HOST & SSL (internal/sitemanager/)
-   - [x] Template Generator Nginx Server Block (/etc/nginx/sites-available/):
-         * PHP-FPM: Fastcgi socket unix /run/php/php<ver>-fpm.sock, security headers,
-           caching asset statis, upload limit 64M, gzip compression.
-         * Node.js Reverse Proxy: Forwarding WebSocket (Upgrade/Connection),
-           X-Real-IP, X-Forwarded-For, target port lokal dinamis.
-         * Static SPA: Routing HTML5/Vue/React SPA 'try_files $uri $uri/ /index.html;'.
-   - [x] Siklus Hidup Virtual Host: Create, Enable (symlink ke sites-enabled),
-         Disable, dan Delete.
-   - [x] Validasi 'nginx -t' sebelum setiap reload; rollback instan jika konfigurasi error.
-   - [x] Certbot SSL: Integrasi otomatis 'certbot --nginx' untuk penerbitan dan
-         pemasangan sertifikat HTTPS gratis dari Let's Encrypt (1-klik).
-
-5. SERVICE LIFECYCLE CONTROLLER & LOGS (internal/servicectl/)
-   - [x] Kontrol systemctl: start, stop, restart, reload, enable, disable.
-   - [x] Batch Status Discovery: Memeriksa sekaligus status Nginx, MySQL, Redis,
-         semua versi PHP-FPM, dan daemon Envku.
-   - [x] Log Inspector: Membaca N baris log terakhir via 'journalctl -u <unit> -n 40 --no-pager'
-         dan helper tailing file log fisik (/var/log/nginx/, /var/log/mysql/).
-
-6. BACKGROUND DAEMON & WATCHDOG (internal/daemon/)
-   - [x] Generator Unit Systemd (/etc/systemd/system/envku.service).
-   - [x] CLI Subcommands:
-         * 'envku daemon install'   -> Daftarkan dan aktifkan service systemd
-         * 'envku daemon uninstall' -> Matikan dan hapus service
-         * 'envku daemon run'       -> Jalankan loop watchdog di foreground
-   - [x] Watchdog Loop: Periodic health check setiap 60 detik untuk mendeteksi servis mati.
-
-7. INTERACTIVE TERMINAL UI (internal/tui/)
-   - [x] Real-time Dashboard: Membaca CPU Model, RAM Usage (MB dan %), Uptime dari /proc.
-   - [x] Badges status servis aktif/mati secara visual.
-   - [x] Menu Interaktif Package Downloader, PHP Manager, Site Wizard, dan Service Controller.
+Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI & PENYEMPURNAAN (100%).
+Aplikasi sekarang mendukung DUA MODE OPERASI:
+  1. PRODUCTION (Server VPS / Cloud Publik): Proteksi Firewall UFW ketat, phpMyAdmin
+     terkunci via whitelist/SSH tunnel, SSL Let's Encrypt, domain FQDN terarah.
+  2. LOCAL DEVELOPMENT (Komputer / Laptop Linux Pribadi & WSL): phpMyAdmin sekali klik
+     langsung terbuka di browser default desktop (xdg-open / wslview), domain pengujian
+     *.test otomatis dipetakan ke /etc/hosts, firewall fleksibel.
 
 ================================================================================
-[3] CARA MENJALANKAN & MENGUJI
+[2] FITUR-FITUR TERBARU YANG DITAMBAHKAN
 ================================================================================
 
-A. DI WINDOWS (Git Bash / WSL / CMD):
-   1. Menjalankan TUI lokal:
-      go run cmd/envku/main.go
+1. DUAL ENVIRONMENT MODE (LOCAL VS PRODUCTION)
+   - [x] Konfigurasi persistent disimpan di /etc/envku-cli/config.json (atau ~/.config/...).
+   - [x] Skrip installer (scripts/install.sh) menyediakan dialog interaktif dan flag
+         (--production atau --local) saat instalasi awal.
+   - [x] Subcommand CLI 'envku mode' dan 'sudo envku mode [local|prod]' untuk melihat
+         atau beralih profil sewaktu-waktu.
+   - [x] Menu TUI '[M] Switch Environment Mode' dengan deskripsi dan auto-apply profil firewall.
 
-   2. Cross-compile binary untuk Linux VPS dari Git Bash:
-      GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o envku cmd/envku/main.go
+2. PHPMYADMIN WEB DATABASE MANAGER (internal/installer/phpmyadmin.go)
+   - [x] Download resmi tarball phpMyAdmin stable tanpa dependensi Apache.
+   - [x] Auto-generate Blowfish Secret 32-karakter acak di config.inc.php.
+   - [x] Server block Nginx mandiri pada port 8080 (tidak bentrok dengan situs utama).
+   - [x] Di mode Local: Sekali klik langsung memanggil browser lokal (xdg-open/wslview).
+   - [x] Di mode Production: Port 8080 dilindungi oleh Firewall UFW dan Nginx IP Whitelist.
+   - [x] Subcommand CLI 'envku pma status' dan 'envku pma open'.
 
-   3. Cross-compile binary untuk Linux VPS dari PowerShell:
-      $env:GOOS="linux"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o envku cmd/envku/main.go
+3. FIREWALL UFW CONTROLLER (internal/firewall/)
+   - [x] Profil Production: Default deny incoming, izinkan 22, 80, 443; blokir port database
+         MySQL (3306), Redis (6379), dan phpMyAdmin (8080) dari publik umum.
+   - [x] Manajemen IP Whitelist Admin khusus untuk akses aman phpMyAdmin.
+   - [x] Profil Local: Membuka akses loopback/LAN agar tools database desktop (DBeaver, TablePlus)
+         bisa terhubung tanpa hambatan.
 
-B. DI SERVER LINUX / VPS / WSL 2:
-   1. Install langsung via bootstrap script:
-      sudo bash scripts/install.sh
+4. BROWSER LAUNCHER & DESKTOP DETECTION (internal/config/browser.go)
+   - [x] Deteksi display GUI Linux (X11 / Wayland / WSL).
+   - [x] Dukungan pemanggilan browser: xdg-open, wslview, google-chrome, firefox, dsb.
 
-   2. Atau jalankan binary langsung:
-      sudo ./envku
+5. SITE MANAGER ENHANCEMENTS & LOCAL DOMAIN RESOLVER (internal/sitemanager/)
+   - [x] Otomatis mendaftarkan domain *.test ke /etc/hosts (127.0.0.1) di mode local.
+   - [x] Pembersihan entri /etc/hosts saat virtual host dihapus.
+   - [x] Proteksi Certbot: Mencegah permintaan SSL Let's Encrypt untuk domain lokal/internal.
+   - [x] Opsi '[O] Buka Domain di Browser' langsung dari menu Site Manager.
 
 ================================================================================
-[4] REKOMENDASI FITUR PENGEMBANGAN BERIKUTNYA (FUTURE ROADMAP)
+[3] FITUR LAIN YANG SUDAH TERPASANG
 ================================================================================
+- [x] Nginx Web Server Installer & Syntax Validator.
+- [x] MySQL Database Server Installer & Systemd integration.
+- [x] Redis In-Memory Cache Server (Official GPG Keyring packages.redis.io).
+- [x] PHP Multi-Version Installer (8.2, 8.3, 8.4, 8.5) via Sury repository.
+- [x] Node.js & NVM Bootstrap.
+- [x] php.ini Parser & Atomic Editor dengan Auto-Backup dan Auto-Rollback.
+- [x] Site Manager: PHP-FPM, Node.js Reverse Proxy, Static SPA, Certbot SSL.
+- [x] Service Lifecycle Controller & Journalctl Log Inspector.
+- [x] Background Daemon & Watchdog Health Check (Systemd).
+- [x] Self-Update Manager langsung dari GitHub Releases.
 
-Bagi AI Agent atau Developer yang melanjutkan project ini, berikut daftar fitur
-yang sangat direkomendasikan untuk ditambahkan ke tahap berikutnya:
+================================================================================
+[4] CARA MENJALANKAN & MENGUJI
+================================================================================
+A. Di Linux Desktop / Laptop Pribadi:
+   1. Install:
+      curl -fsSL https://raw.githubusercontent.com/LabibAbdullah1/envku-cli/main/scripts/install.sh | sudo bash -s -- --local
+   2. Jalankan TUI:
+      sudo envku
+   3. Pasang phpMyAdmin dan buka di browser:
+      Pilih menu [6] -> [1] Buka phpMyAdmin di Browser (atau 'envku pma open')
 
-1. DATABASE MANAGER WIZARD:
-   - Fitur wizard interaktif untuk membuat database MySQL baru, membuat user baru,
-     dan memberikan hak akses (GRANT ALL PRIVILEGES) secara otomatis tanpa harus
-     masuk ke prompt SQL manual.
-
-2. FIREWALL (UFW) CONTROLLER:
-   - Modul 'internal/firewall/' untuk mengelola UFW (Uncomplicated Firewall):
-     Membuka port 80 (HTTP), 443 (HTTPS), 22 (SSH), 3306 (MySQL), 6379 (Redis),
-     dan mengaktifkan proteksi rate-limiting.
-
-3. POSTGRESQL SUPPORT:
-   - Menambahkan opsi database PostgreSQL disamping MySQL di modul 'internal/installer/database.go'.
-
-4. AUTOMATIC DATABASE & WEB BACKUP (CRON SCHEDULER):
-   - Modul backup terjadwal untuk meng-dump database MySQL (mysqldump) dan mengompresi
-     direktori /var/www/<domain> ke format tar.gz, lalu disimpan lokal atau diunggah
-     ke S3/Google Drive / SFTP remote.
-
-5. REST API & HEADLESS DAEMON MODE:
-   - Membuka lightweight internal HTTP/JSON API (misal port 9876 dengan token auth)
-     pada daemon Envku sehingga status server dan kontrol servis bisa diakses dari
-     web dashboard atau aplikasi mobile.
-
-6. CHARM TUI UPGRADE (BUBBLETEA & LIPGLOSS):
-   - Meningkatkan antarmuka terminal dari pure ANSI saat ini menjadi visual TUI modern
-     menggunakan Charm.sh (Bubbletea, Lipgloss, Bubbles) dengan layout box, tabel,
-     dan color palette yang lebih elegan.
+B. Di Server VPS / Cloud:
+   1. Install:
+      curl -fsSL https://raw.githubusercontent.com/LabibAbdullah1/envku-cli/main/scripts/install.sh | sudo bash -s -- --production
+   2. Pasang firewall dan amankan server:
+      sudo envku mode production
 
 ================================================================================
 DOKUMEN INI ADALAH SINGLE SOURCE OF TRUTH (SSOT) UNTUK STATUS & HANDOVER PROYEK.

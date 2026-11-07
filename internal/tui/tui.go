@@ -37,16 +37,18 @@ func Run() error {
 
 	for {
 		clearScreen()
-		renderDashboard(ctl)
+		renderDashboard(ctl, inst)
 
 		fmt.Println("==================================================")
 		fmt.Println("                   MAIN MENU                      ")
 		fmt.Println("==================================================")
 		fmt.Println("[1] 📊 Refresh Dashboard")
-		fmt.Println("[2] 📦 App & Package Downloader (Nginx, MySQL, Redis, PHP, Node)")
-		fmt.Println("[3] ⚙️ PHP Manager (php.ini Tweaks & Extensions)")
-		fmt.Println("[4] 🖥️ Site Manager (Virtual Host & Certbot SSL)")
+		fmt.Println("[2] 📦 App & Package Downloader (Nginx, MySQL, Redis, PHP, Node, PMA)")
+		fmt.Println("[3] ⚙️  PHP Manager (php.ini Tweaks & Extensions)")
+		fmt.Println("[4] 🖥️  Site Manager (Virtual Host, Hosts & SSL)")
 		fmt.Println("[5] ⚡ Service Manager (systemctl & Log Inspector)")
+		fmt.Println("[6] 🗄️  phpMyAdmin & Database Access")
+		fmt.Println("[M] 🔀 Switch Environment Mode (Local vs Production)")
 		if cachedUpdateInfo != nil && cachedUpdateInfo.Available {
 			fmt.Printf("[U] 🚀 Update Envku CLI ke v%s [UPDATE READY]\n", cachedUpdateInfo.LatestVersion)
 		} else {
@@ -55,7 +57,7 @@ func Run() error {
 		fmt.Println("--------------------------------------------------")
 		fmt.Println("[0] 🚪 Exit")
 		fmt.Println("==================================================")
-		fmt.Print("Select an option [0-5, U]: ")
+		fmt.Print("Select an option [0-6, M, U]: ")
 
 		choice, err := reader.ReadString('\n')
 		if err != nil {
@@ -75,6 +77,10 @@ func Run() error {
 			runSiteMenu(reader)
 		case "5":
 			runServiceMenu(reader)
+		case "6":
+			runPHPMyAdminMenu(inst.PMA, reader)
+		case "M":
+			runEnvironmentMenu(reader)
 		case "U":
 			handleTUIUpdate(reader)
 		case "0":
@@ -146,12 +152,18 @@ func handleTUIUpdate(reader *bufio.Reader) {
 	waitEnter(reader)
 }
 
-func renderDashboard(ctl *servicectl.Controller) {
+func renderDashboard(ctl *servicectl.Controller, inst *installer.Installer) {
 	metrics := GetSystemMetrics()
+	cfg := config.GetConfig()
 
 	fmt.Println("==================================================")
-	fmt.Printf("   🚀 ENVKU CLI v%s - Linux Server Manager\n", config.AppVersion)
+	if cfg.Environment == config.ModeLocal {
+		fmt.Printf("   🚀 ENVKU CLI v%s [MODE: 💻 LOCAL DEVELOPMENT]\n", config.AppVersion)
+	} else {
+		fmt.Printf("   🚀 ENVKU CLI v%s [MODE: 🌐 PRODUCTION VPS]\n", config.AppVersion)
+	}
 	fmt.Println("==================================================")
+
 	if !installer.IsRoot() {
 		fmt.Println("  ⚠️  Notice: Running as non-root user.")
 		fmt.Println("     Run with 'sudo envku' to manage/install system services.")
@@ -162,11 +174,39 @@ func renderDashboard(ctl *servicectl.Controller) {
 		fmt.Println("     Pilih opsi [U] untuk memperbarui aplikasi otomatis!")
 		fmt.Println("--------------------------------------------------")
 	}
-	fmt.Printf(" CPU Model : %s\n", metrics.CPUModel)
-	if metrics.RAMTotalMB > 0 {
-		fmt.Printf(" RAM Usage : %d MB / %d MB (%.1f%%)\n", metrics.RAMUsedMB, metrics.RAMTotalMB, metrics.RAMUsedPerc)
+
+	// Environment & Network Info
+	if cfg.Environment == config.ModeLocal {
+		browserStatus := "Tidak Terdeteksi (Headless)"
+		if config.CanOpenBrowser() {
+			browserStatus = "Terdeteksi & Siap (xdg-open)"
+		}
+		fmt.Printf(" Akses Jaringan: Localhost (127.0.0.1) | Browser: %s\n", browserStatus)
+	} else {
+		serverIP := cfg.ServerIP
+		if serverIP == "" {
+			serverIP = config.DetectPublicIP()
+		}
+		fmt.Printf(" IP Publik VPS : %s | Firewall: UFW Enforced\n", serverIP)
 	}
-	fmt.Printf(" Uptime    : %s\n", metrics.Uptime)
+
+	fmt.Printf(" CPU Model     : %s\n", metrics.CPUModel)
+	if metrics.RAMTotalMB > 0 {
+		fmt.Printf(" RAM Usage     : %d MB / %d MB (%.1f%%)\n", metrics.RAMUsedMB, metrics.RAMTotalMB, metrics.RAMUsedPerc)
+	}
+	fmt.Printf(" Uptime        : %s\n", metrics.Uptime)
+
+	// phpMyAdmin Quick Badge
+	if inst.PMA.IsInstalled() {
+		if cfg.Environment == config.ModeLocal {
+			fmt.Printf(" phpMyAdmin    : [ONLINE] %s\n", inst.PMA.GetAccessURL())
+		} else {
+			fmt.Printf(" phpMyAdmin    : [PROTECTED] %s (Restricted via Firewall/IP)\n", inst.PMA.GetAccessURL())
+		}
+	} else {
+		fmt.Printf(" phpMyAdmin    : [NOT INSTALLED] (Pilih menu [6] untuk pasang)\n")
+	}
+
 	fmt.Println("--------------------------------------------------")
 	fmt.Println(" Service Health Status:")
 
