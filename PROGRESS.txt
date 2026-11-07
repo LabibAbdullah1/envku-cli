@@ -14,9 +14,11 @@ Repository     : github.com/LabibAbdullah1/envku-cli
 Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI & PENYEMPURNAAN LENGKAP (100%).
 Aplikasi sekarang telah teruji secara komprehensif dengan penambahan:
   1. DUAL ENVIRONMENT MODE (Production VPS vs Local Linux Pribadi).
-  2. PHPMYADMIN & BROWSER LAUNCHER:
-     - Local: Sekali klik buka di browser lokal (xdg-open/wslview).
-     - Prod: Terlindungi UFW firewall dan IP whitelist.
+  2. PHPMYADMIN & MYSQL LOCAL (ROOT TANPA PASSWORD):
+     - Local: MySQL user root dikonfigurasi tanpa password (localhost & 127.0.0.1)
+       dan phpMyAdmin disetel 'AllowNoPassword = true' dengan default user 'root'.
+       Sekali klik langsung buka di browser lokal (xdg-open/wslview) dan login instan.
+     - Prod: MySQL root ber-password aman, phpMyAdmin terlindungi UFW firewall & IP whitelist.
   3. SAFE ATOMIC SELF-UPDATER:
      - Validasi ELF/PE magic header, minimum file size (>500KB).
      - Auto-backup binary lama (envku.bak).

@@ -12,6 +12,7 @@ import (
 
 func runPHPMyAdminMenu(pma *installer.PHPMyAdminInstaller, reader *bufio.Reader) {
 	fw := firewall.New()
+	mysqlInst := installer.NewMySQLInstaller()
 
 	for {
 		clearScreen()
@@ -30,6 +31,7 @@ func runPHPMyAdminMenu(pma *installer.PHPMyAdminInstaller, reader *bufio.Reader)
 			fmt.Printf(" URL Akses         : %s\n", url)
 			if cfg.Environment == config.ModeLocal {
 				fmt.Println(" Akses Lokal       : ✅ Browser Lokal didukung (xdg-open / wslview)")
+				fmt.Println(" Kredensial MySQL  : 👉 User: root | Password: (Kosong / Tanpa Password)")
 			} else {
 				fmt.Println(" Proteksi Produksi : 🛡️ Dibatasi oleh Firewall & Nginx allowlist")
 				if len(cfg.AllowedAdminIPs) > 0 {
@@ -44,11 +46,12 @@ func runPHPMyAdminMenu(pma *installer.PHPMyAdminInstaller, reader *bufio.Reader)
 			if cfg.Environment == config.ModeProduction {
 				fmt.Println("    (⚠️ Perhatian: Di mode Production, akses akan otomatis dilindungi firewall)")
 			} else {
-				fmt.Println("    (Akan otomatis disiapkan untuk akses http://localhost:8080)")
+				fmt.Println("    (Otomatis disiapkan untuk akses http://localhost:8080 & root tanpa password)")
 			}
 		} else {
 			if cfg.Environment == config.ModeLocal {
 				fmt.Println("[1] 🌐 Buka phpMyAdmin di Browser (xdg-open)")
+				fmt.Println("[P] 🔓 Setel / Reset MySQL root Tanpa Password")
 			} else {
 				fmt.Println("[1] ℹ️  Cara Akses phpMyAdmin di Production (VPS)")
 				fmt.Println("[2] 🛡️  Konfigurasi IP Whitelist Admin")
@@ -89,10 +92,23 @@ func runPHPMyAdminMenu(pma *installer.PHPMyAdminInstaller, reader *bufio.Reader)
 					fmt.Printf("    Buka manual di: %s\n", pma.GetAccessURL())
 				} else {
 					fmt.Printf("[+] Halaman phpMyAdmin dibuka di browser: %s\n", pma.GetAccessURL())
+					fmt.Println("    (Gunakan username: root, password: [kosongkan])")
 				}
 				waitEnter(reader)
 			} else {
 				showProductionAccessGuide(pma, reader)
+			}
+
+		case "P":
+			if cfg.Environment == config.ModeLocal {
+				fmt.Println("\n[*] Mengonfigurasi MySQL root tanpa password (localhost & 127.0.0.1)...")
+				if err := mysqlInst.ConfigureLocalRootNoPassword(); err != nil {
+					fmt.Printf("[-] Gagal mengonfigurasi root MySQL: %v\n", err)
+				} else {
+					fmt.Println("[+] Berhasil! Akun MySQL root kini dapat login tanpa password.")
+					fmt.Println("    Anda bisa langsung masuk ke phpMyAdmin atau aplikasi lokal tanpa mengisi password.")
+				}
+				waitEnter(reader)
 			}
 
 		case "2":
@@ -200,4 +216,3 @@ func configureAdminIPWhitelist(reader *bufio.Reader) {
 		}
 	}
 }
-

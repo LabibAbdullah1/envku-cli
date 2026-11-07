@@ -33,7 +33,7 @@ Envku CLI membedakan fungsionalitas antara komputer Linux pribadi dan server VPS
 | **Sertifikat SSL** | Ditiadakan / Self-signed untuk domain lokal | **1-Klik Let's Encrypt SSL (Certbot)** otomatis dengan auto-renewal |
 | **Profil Firewall (UFW)**| **Permissive** (Port 80, 443, 3306, 6379, 8080 terbuka di loopback) | **Strict** (Port 3306, 6379, 8080 diblokir dari publik; hanya 22, 80, 443) |
 | **PHP Error Reporting** | `display_errors = On` & `error_reporting = E_ALL` | `display_errors = Off`, `expose_php = Off`, Opcache aktif |
-| **Akses Database CLI** | Root password fleksibel untuk tool desktop (TablePlus, DBeaver) | Root password diamankan, dianjurkan user database khusus per aplikasi |
+| **Akses Database & phpMyAdmin** | **User `root` tanpa password** (`AllowNoPassword = true`), langsung masuk di `http://localhost:8080` | Root password diamankan, phpMyAdmin dibatasi firewall & IP whitelist |
 | **Deteksi Browser** | Otomatis deteksi `xdg-open`, `wslview`, Chrome, Firefox | Non-aktif (Headless Server) |
 
 ---
