@@ -11,10 +11,13 @@ import (
 
 // DistroInfo contains detected Linux distribution metadata
 type DistroInfo struct {
-	ID        string
-	VersionID string
-	Name      string
-	Codename  string
+	ID             string
+	IDLike         string
+	VersionID      string
+	Name           string
+	Codename       string
+	UbuntuCodename string
+	DebianCodename string
 }
 
 // DetectOS parses /etc/os-release to detect Linux distribution details
@@ -31,18 +34,108 @@ func DetectOS() (*DistroInfo, error) {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "ID=") {
 			info.ID = strings.Trim(strings.TrimPrefix(line, "ID="), `"`)
+		} else if strings.HasPrefix(line, "ID_LIKE=") {
+			info.IDLike = strings.Trim(strings.TrimPrefix(line, "ID_LIKE="), `"`)
 		} else if strings.HasPrefix(line, "VERSION_ID=") {
 			info.VersionID = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), `"`)
 		} else if strings.HasPrefix(line, "NAME=") {
 			info.Name = strings.Trim(strings.TrimPrefix(line, "NAME="), `"`)
 		} else if strings.HasPrefix(line, "VERSION_CODENAME=") {
 			info.Codename = strings.Trim(strings.TrimPrefix(line, "VERSION_CODENAME="), `"`)
-		} else if strings.HasPrefix(line, "UBUNTU_CODENAME=") && info.Codename == "" {
-			info.Codename = strings.Trim(strings.TrimPrefix(line, "UBUNTU_CODENAME="), `"`)
+		} else if strings.HasPrefix(line, "UBUNTU_CODENAME=") {
+			info.UbuntuCodename = strings.Trim(strings.TrimPrefix(line, "UBUNTU_CODENAME="), `"`)
+		} else if strings.HasPrefix(line, "DEBIAN_CODENAME=") {
+			info.DebianCodename = strings.Trim(strings.TrimPrefix(line, "DEBIAN_CODENAME="), `"`)
 		}
 	}
 
 	return info, scanner.Err()
+}
+
+// IsDebian returns true if the OS is pure Debian or LMDE
+func (d *DistroInfo) IsDebian() bool {
+	if d.ID == "debian" {
+		return true
+	}
+	if d.ID == "linuxmint" && strings.Contains(strings.ToUpper(d.Name), "LMDE") {
+		return true
+	}
+	if strings.Contains(d.IDLike, "debian") && !strings.Contains(d.IDLike, "ubuntu") {
+		return true
+	}
+	return false
+}
+
+// GetEffectiveUbuntuCodename resolves the underlying Ubuntu LTS codename for Ubuntu and derivatives (Linux Mint, Pop!_OS, Zorin, etc.)
+func (d *DistroInfo) GetEffectiveUbuntuCodename() string {
+	// 1. If explicit UBUNTU_CODENAME is in /etc/os-release (Linux Mint 21/22 and others specify this)
+	if d.UbuntuCodename != "" {
+		return strings.ToLower(d.UbuntuCodename)
+	}
+
+	codename := strings.ToLower(d.Codename)
+
+	// 2. Linux Mint codename & version mapping
+	if d.ID == "linuxmint" || strings.Contains(d.IDLike, "linuxmint") {
+		// Mint 20.x -> focal (Ubuntu 20.04)
+		if strings.HasPrefix(d.VersionID, "20") || strings.Contains(codename, "ulyana") ||
+			strings.Contains(codename, "ulyssa") || strings.Contains(codename, "uma") || strings.Contains(codename, "una") {
+			return "focal"
+		}
+		// Mint 21.x -> jammy (Ubuntu 22.04)
+		if strings.HasPrefix(d.VersionID, "21") || strings.Contains(codename, "vanessa") ||
+			strings.Contains(codename, "vera") || strings.Contains(codename, "victoria") || strings.Contains(codename, "virginia") {
+			return "jammy"
+		}
+		// Mint 22.x (zena, wilma, xia) -> noble (Ubuntu 24.04)
+		return "noble"
+	}
+
+	// 3. Version ID prefix heuristics
+	if strings.HasPrefix(d.VersionID, "24") {
+		return "noble"
+	}
+	if strings.HasPrefix(d.VersionID, "22") {
+		return "jammy"
+	}
+	if strings.HasPrefix(d.VersionID, "20") {
+		return "focal"
+	}
+
+	// 4. If already an Ubuntu codename
+	knownUbuntu := map[string]bool{
+		"noble": true, "jammy": true, "focal": true, "bionic": true, "mantic": true, "lunar": true, "kinetic": true,
+	}
+	if knownUbuntu[codename] {
+		return codename
+	}
+
+	// Default fallback to latest modern Ubuntu LTS
+	return "noble"
+}
+
+// GetEffectiveDebianCodename resolves Debian release codename (bookworm, bullseye, buster)
+func (d *DistroInfo) GetEffectiveDebianCodename() string {
+	if d.DebianCodename != "" {
+		return strings.ToLower(d.DebianCodename)
+	}
+
+	codename := strings.ToLower(d.Codename)
+	knownDebian := map[string]bool{
+		"bookworm": true, "bullseye": true, "buster": true, "trixie": true, "sid": true,
+	}
+	if knownDebian[codename] {
+		return codename
+	}
+
+	if strings.HasPrefix(d.VersionID, "12") {
+		return "bookworm"
+	}
+	if strings.HasPrefix(d.VersionID, "11") {
+		return "bullseye"
+	}
+
+	return "bookworm"
 }
 
 // RunCommand executes a command with non-interactive flags set for debian/ubuntu

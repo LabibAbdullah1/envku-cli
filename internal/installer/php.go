@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -14,44 +15,57 @@ func NewPHPInstaller() *PHPInstaller {
 	return &PHPInstaller{}
 }
 
-// SetupRepository adds the official Ondřej Surý PHP repository (supports Debian & Ubuntu, including Ubuntu 26.04 Resolute)
+// SetupRepository adds the official Ondřej Surý PHP repository correctly tailored for Debian, Ubuntu, and Ubuntu derivatives (Linux Mint, Pop!_OS, Zorin)
 func (p *PHPInstaller) SetupRepository() error {
 	osInfo, err := DetectOS()
-	codename := ""
-	if err == nil {
-		codename = osInfo.Codename
+	if err != nil {
+		osInfo = &DistroInfo{ID: "ubuntu", Codename: "noble"}
 	}
 
-	if codename == "" {
-		if out, err := exec.Command("lsb_release", "-sc").Output(); err == nil {
-			codename = strings.TrimSpace(string(out))
-		}
-	}
-
-	// Fallback codename if undetected
-	if codename == "" {
-		codename = "noble"
-	}
-
-	// 1. Clean up legacy or broken Launchpad PPA entries that fail on newer Ubuntu suites (e.g. resolute)
-	cleanCmd := "rm -f /etc/apt/sources.list.d/*ondrej* /etc/apt/sources.list.d/php.list 2>/dev/null || true"
+	// 1. Clean up legacy or broken Sury/Launchpad entries that failed previously (e.g. invalid 'zena' codename on Linux Mint)
+	cleanCmd := "rm -f /etc/apt/sources.list.d/php.list /etc/apt/sources.list.d/*ondrej* 2>/dev/null || true"
 	_ = exec.Command("bash", "-c", cleanCmd).Run()
 
 	// 2. Install prerequisites
-	packages := []string{"apt-transport-https", "ca-certificates", "curl", "lsb-release"}
+	packages := []string{"software-properties-common", "apt-transport-https", "ca-certificates", "curl", "gnupg", "lsb-release"}
 	_ = AptInstall(packages...)
 
-	// 3. Fetch canonical Sury GPG key
-	_ = exec.Command("mkdir", "-p", "/etc/apt/keyrings", "/etc/apt/trusted.gpg.d").Run()
-	cmdGPG := "curl -sSLo /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && cp /etc/apt/trusted.gpg.d/php.gpg /etc/apt/keyrings/sury-php.gpg 2>/dev/null || true"
-	if err := exec.Command("bash", "-c", cmdGPG).Run(); err != nil {
-		return fmt.Errorf("failed to fetch sury php gpg key: %w", err)
-	}
+	_ = os.MkdirAll("/etc/apt/keyrings", 0755)
+	_ = os.MkdirAll("/etc/apt/trusted.gpg.d", 0755)
 
-	// 4. Write canonical repository to /etc/apt/sources.list.d/php.list
-	cmdRepo := fmt.Sprintf(`echo "deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg] https://packages.sury.org/php/ %s main" > /etc/apt/sources.list.d/php.list`, codename)
-	if err := exec.Command("bash", "-c", cmdRepo).Run(); err != nil {
-		return fmt.Errorf("failed to write php.list: %w", err)
+	// 3. Configure repository according to distribution type
+	if osInfo.IsDebian() {
+		// Pure Debian or LMDE (Linux Mint Debian Edition)
+		debianCodename := osInfo.GetEffectiveDebianCodename()
+		fmt.Printf("[*] Terdeteksi sistem Debian (Codename basis: %s)...\n", debianCodename)
+
+		cmdGPG := "curl -sSLo /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg && cp /etc/apt/trusted.gpg.d/php.gpg /etc/apt/keyrings/sury-php.gpg 2>/dev/null || true"
+		if err := exec.Command("bash", "-c", cmdGPG).Run(); err != nil {
+			return fmt.Errorf("gagal mengunduh GPG key Sury Debian: %w", err)
+		}
+
+		cmdRepo := fmt.Sprintf(`echo "deb [signed-by=/etc/apt/trusted.gpg.d/php.gpg] https://packages.sury.org/php/ %s main" > /etc/apt/sources.list.d/php.list`, debianCodename)
+		if err := exec.Command("bash", "-c", cmdRepo).Run(); err != nil {
+			return fmt.Errorf("gagal menulis repositori Debian php.list: %w", err)
+		}
+	} else {
+		// Ubuntu & Ubuntu Derivatives (Linux Mint, Pop!_OS, Zorin OS, Elementary OS)
+		ubuntuCodename := osInfo.GetEffectiveUbuntuCodename()
+		fmt.Printf("[*] Terdeteksi sistem basis Ubuntu/Linux Mint (Codename basis: %s)...\n", ubuntuCodename)
+
+		// Fetch official Launchpad PPA GPG key for Ondrej PHP
+		cmdGPG := `curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C" | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/ondrej-ubuntu-php.gpg 2>/dev/null || true`
+		_ = exec.Command("bash", "-c", cmdGPG).Run()
+
+		// Write canonical Launchpad PPA entry with resolved Ubuntu codename (fixing 404 on Linux Mint 'zena'/'wilma')
+		cmdRepo := fmt.Sprintf(`echo "deb [signed-by=/etc/apt/trusted.gpg.d/ondrej-ubuntu-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu %s main" > /etc/apt/sources.list.d/ondrej-ubuntu-php.list`, ubuntuCodename)
+		if err := exec.Command("bash", "-c", cmdRepo).Run(); err != nil {
+			// Fallback: try add-apt-repository utility directly
+			if errPPA := EnsurePPA("ppa:ondrej/php"); errPPA != nil {
+				return fmt.Errorf("gagal menambahkan repositori PPA Ondrej untuk Ubuntu/Mint (%s): %w", ubuntuCodename, errPPA)
+			}
+			return nil
+		}
 	}
 
 	return AptUpdate()
