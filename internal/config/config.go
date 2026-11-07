@@ -15,14 +15,17 @@ import (
 
 // Default path configurations and global settings for Envku CLI
 var (
-	AppName    = "envku"
+	AppName    = "envku-cli"
 	AppVersion = "1.0.0"
 )
 
 const (
 	DefaultConfigDir = "/etc/envku-cli"
 	ConfigFile       = "/etc/envku-cli/config.json"
-	ServiceFile      = "/etc/systemd/system/envku.service"
+	ServiceFile      = "/etc/systemd/system/envku-cli.service"
+	DefaultBinPath   = "/usr/local/bin/envku-cli"
+	SymlinkBinPath   = "/usr/local/bin/envku"
+	ServiceName      = "envku-cli"
 	NginxSitesAvail  = "/etc/nginx/sites-available"
 	NginxSitesEnable = "/etc/nginx/sites-enabled"
 	PMADir           = "/usr/share/phpmyadmin"

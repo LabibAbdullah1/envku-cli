@@ -91,7 +91,7 @@ func (c *Controller) GetStatus(service string) (*ServiceState, error) {
 	}, nil
 }
 
-// ListManagedServices queries the statuses of all web and database services managed by Envku
+// ListManagedServices queries the statuses of all web and database services managed by Envku CLI
 func (c *Controller) ListManagedServices() []ServiceState {
 	candidates := []struct {
 		name string
@@ -104,6 +104,7 @@ func (c *Controller) ListManagedServices() []ServiceState {
 		{"PHP 8.3 FPM", "php8.3-fpm"},
 		{"PHP 8.4 FPM", "php8.4-fpm"},
 		{"PHP 8.5 FPM", "php8.5-fpm"},
+		{"Envku CLI Daemon", "envku-cli"},
 		{"Envku Daemon", "envku"},
 	}
 

@@ -3,7 +3,7 @@
 set -e
 
 echo "=================================================="
-echo "          Envku CLI - Bootstrap Installer         "
+echo "        Envku CLI - Bootstrap Installer           "
 echo "=================================================="
 
 # Check Root Privileges
@@ -27,7 +27,6 @@ done
 
 # If mode is not passed via CLI flag, ask interactively
 if [ -z "$CHOSEN_MODE" ]; then
-  # Determine if an interactive tty is available (even when piped through curl | sudo bash)
   TTY_SRC=""
   if [ -t 0 ]; then
     TTY_SRC="/dev/stdin"
@@ -53,7 +52,6 @@ if [ -z "$CHOSEN_MODE" ]; then
         ;;
     esac
   else
-    # Non-interactive automated default
     CHOSEN_MODE="production"
   fi
 fi
@@ -76,12 +74,14 @@ case $ARCH in
 esac
 
 REPO="LabibAbdullah1/envku-cli"
-BIN_NAME="envku-linux-$BIN_ARCH"
-TARGET_BIN="/usr/local/bin/envku"
+BIN_NAME="envku-cli-linux-$BIN_ARCH"
+LEGACY_BIN_NAME="envku-linux-$BIN_ARCH"
+TARGET_BIN="/usr/local/bin/envku-cli"
+SYMLINK_BIN="/usr/local/bin/envku"
 
 echo "[+] Detected architecture: linux-$BIN_ARCH"
 
-TMP_BIN="/tmp/envku-install.$$"
+TMP_BIN="/tmp/envku-cli-install.$$"
 cleanup() {
   rm -f "$TMP_BIN"
 }
@@ -89,19 +89,31 @@ trap cleanup EXIT
 
 # If background daemon is currently running, stop it temporarily during update
 RESTART_SERVICE=0
-if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet envku 2>/dev/null; then
-  echo "[*] Stopping running Envku background daemon for binary update..."
-  systemctl stop envku 2>/dev/null || true
-  RESTART_SERVICE=1
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-active --quiet envku-cli 2>/dev/null; then
+    echo "[*] Stopping running Envku CLI background daemon for binary update..."
+    systemctl stop envku-cli 2>/dev/null || true
+    RESTART_SERVICE=1
+  elif systemctl is-active --quiet envku 2>/dev/null; then
+    echo "[*] Stopping running legacy Envku background daemon..."
+    systemctl stop envku 2>/dev/null || true
+    RESTART_SERVICE=1
+  fi
 fi
 
 # If local binary exists in build or dist, install that; otherwise download from GitHub Releases
 if [ -f "./dist/$BIN_NAME" ]; then
   echo "[+] Installing local binary from ./dist/$BIN_NAME..."
   install -m 755 "./dist/$BIN_NAME" "$TARGET_BIN"
+elif [ -f "./dist/$LEGACY_BIN_NAME" ]; then
+  echo "[+] Installing local binary from ./dist/$LEGACY_BIN_NAME..."
+  install -m 755 "./dist/$LEGACY_BIN_NAME" "$TARGET_BIN"
 elif [ -f "./$BIN_NAME" ]; then
   echo "[+] Installing local binary from ./$BIN_NAME..."
   install -m 755 "./$BIN_NAME" "$TARGET_BIN"
+elif [ -f "./envku-cli" ]; then
+  echo "[+] Installing local binary from ./envku-cli..."
+  install -m 755 "./envku-cli" "$TARGET_BIN"
 elif [ -f "./envku" ]; then
   echo "[+] Installing local binary from ./envku..."
   install -m 755 "./envku" "$TARGET_BIN"
@@ -112,19 +124,25 @@ else
     echo "[+] Downloaded $BIN_NAME from $DIRECT_URL"
     install -m 755 "$TMP_BIN" "$TARGET_BIN"
   else
-    LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*$BIN_NAME" | cut -d '"' -f 4)
-    if [ -n "$LATEST_URL" ] && curl -fsSL "$LATEST_URL" -o "$TMP_BIN"; then
-      echo "[+] Downloaded $BIN_NAME from $LATEST_URL"
+    DIRECT_LEGACY_URL="https://github.com/$REPO/releases/latest/download/$LEGACY_BIN_NAME"
+    if curl -fsSL "$DIRECT_LEGACY_URL" -o "$TMP_BIN" 2>/dev/null; then
+      echo "[+] Downloaded $LEGACY_BIN_NAME from $DIRECT_LEGACY_URL"
       install -m 755 "$TMP_BIN" "$TARGET_BIN"
     else
-      echo "[-] Warning: No pre-compiled release found on GitHub. Checking if Go is installed to compile from source..."
-      if command -v go >/dev/null 2>&1; then
-        echo "[+] Building binary with Go..."
-        go build -ldflags="-s -w" -o "$TMP_BIN" ./cmd/envku
+      LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep -E "browser_download_url.*(envku-cli|envku)-linux-$BIN_ARCH" | head -n 1 | cut -d '"' -f 4)
+      if [ -n "$LATEST_URL" ] && curl -fsSL "$LATEST_URL" -o "$TMP_BIN"; then
+        echo "[+] Downloaded binary from $LATEST_URL"
         install -m 755 "$TMP_BIN" "$TARGET_BIN"
       else
-        echo "[-] Error: Release binary not found on GitHub and Go is not installed."
-        exit 1
+        echo "[-] Warning: No pre-compiled release found on GitHub. Checking if Go is installed to compile from source..."
+        if command -v go >/dev/null 2>&1; then
+          echo "[+] Building binary with Go..."
+          go build -ldflags="-s -w" -o "$TMP_BIN" ./cmd/envku
+          install -m 755 "$TMP_BIN" "$TARGET_BIN"
+        else
+          echo "[-] Error: Release binary not found on GitHub and Go is not installed."
+          exit 1
+        fi
       fi
     fi
   fi
@@ -133,21 +151,26 @@ fi
 chmod +x "$TARGET_BIN"
 echo "[+] Binary successfully installed at $TARGET_BIN"
 
+# Create / update symlink /usr/local/bin/envku -> /usr/local/bin/envku-cli
+rm -f "$SYMLINK_BIN"
+ln -sf "$TARGET_BIN" "$SYMLINK_BIN"
+echo "[+] Created alias symlink $SYMLINK_BIN -> $TARGET_BIN"
+
 # Set configured environment mode
 echo "[*] Configuring environment mode: $CHOSEN_MODE..."
 "$TARGET_BIN" mode "$CHOSEN_MODE" || true
 
 # Register & Enable Background Systemd Daemon
-echo "[+] Registering Envku Systemd background service..."
+echo "[+] Registering Envku CLI Systemd background service..."
 if "$TARGET_BIN" daemon install; then
-  echo "[+] Envku daemon installed and running."
+  echo "[+] Envku CLI daemon installed and running."
 else
   echo "[!] Note: Daemon could not be automatically registered (systemd might not be active in containers/WSL1)."
 fi
 
 if [ "$RESTART_SERVICE" -eq 1 ]; then
-  echo "[+] Restarting Envku background daemon..."
-  systemctl start envku 2>/dev/null || true
+  echo "[+] Restarting Envku CLI background daemon..."
+  systemctl start envku-cli 2>/dev/null || true
 fi
 
 echo "=================================================="
@@ -163,5 +186,6 @@ else
   echo "  • Akses wajib melalui IP Publik VPS atau Domain terarah"
 fi
 echo "--------------------------------------------------"
-echo "  Launch the manager anytime by typing: sudo envku"
+echo "  Launch the manager anytime by typing:"
+echo "    👉 sudo envku-cli   (atau: sudo envku)"
 echo "=================================================="

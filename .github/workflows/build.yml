@@ -37,16 +37,18 @@ jobs:
 
       - name: Build Linux amd64
         run: |
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-linux-amd64 ./cmd/envku
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-cli-linux-amd64 ./cmd/envku
+          cp dist/envku-cli-linux-amd64 dist/envku-linux-amd64
 
       - name: Build Linux arm64
         run: |
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-linux-arm64 ./cmd/envku
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'github.com/LabibAbdullah1/envku-cli/internal/config.AppVersion=${{ env.APP_VER }}'" -o dist/envku-cli-linux-arm64 ./cmd/envku
+          cp dist/envku-cli-linux-arm64 dist/envku-linux-arm64
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: envku-binaries
+          name: envku-cli-binaries
           path: dist/*
 
       - name: Publish GitHub Release
@@ -59,6 +61,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
+            dist/envku-cli-linux-amd64
+            dist/envku-cli-linux-arm64
             dist/envku-linux-amd64
             dist/envku-linux-arm64
         env:

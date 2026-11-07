@@ -15,8 +15,8 @@ Dirancang fleksibel untuk berjalan di dua jenis lingkungan: **Server VPS Publik 
   * **Di Production:** Dibatasi oleh firewall UFW dan Nginx IP Whitelist untuk melindungi database dari ancaman brute-force publik.
 * **🖥️ Local Domain Resolver:** Otomatis menambahkan domain pengujian (seperti `proyek.test`) ke `/etc/hosts` di Linux pribadi.
 * **🛡️ Safe & Atomic Operations:** Setiap perubahan konfigurasi dilengkapi dengan *auto-backup*, validasi sintaks otomatis (`nginx -t` / `php-fpm -t`), dan *auto-rollback*.
-* **📦 Non-Interactive & Automated:** Semua perintah instalasi dieksekusi dengan flag non-interaktif (`DEBIAN_FRONTEND=noninteractive`).
-* **🔄 Background Daemon Integration:** Terintegrasi dengan Systemd Linux (`envku.service`) sebagai watchdog pemantau kesehatan server.
+* **🔄 Safe Atomic Self-Updater:** Update otomatis divalidasi dengan pengecekan ukuran berkas, ELF header check, auto-backup, dan rollback jika gagal.
+* **🗑️ Fitur Pencopotan Bersih (Uninstall Manager):** Fleksibel memilih apakah hanya mencopot Envku CLI dengan data aman, atau membersihkan seluruh web stack (*purge*).
 
 ---
 
@@ -72,37 +72,8 @@ Anda juga dapat menjalankan instalasi otomatis tanpa dialog menggunakan flag:
 
 ---
 
-### Metode 2: Kompilasi Manual dari Source
-
-```bash
-# 1. Clone repository
-git clone https://github.com/LabibAbdullah1/envku-cli.git
-cd envku-cli
-
-# 2. Build binary
-go build -ldflags="-s -w" -o envku ./cmd/envku
-
-# 3. Pindahkan ke direktori bin & daftarkan daemon
-sudo mv envku /usr/local/bin/
-sudo chmod +x /usr/local/bin/envku
-sudo envku daemon install
-
-# 4. Tentukan mode environment (pilih salah satu)
-sudo envku mode local        # Untuk PC / Laptop Linux
-# atau
-sudo envku mode production   # Untuk VPS Server
-```
-
----
-
 ## 🚀 Perintah CLI & Penggunaan
 
-### 1. Membuka Dashboard TUI Utama
-```bash
-sudo envku
-```
-
-### 2. Perintah Cepat CLI
 | Perintah | Deskripsi |
 | :--- | :--- |
 | `envku` | Membuka antarmuka interaktif TUI utama |
@@ -111,30 +82,42 @@ sudo envku
 | `sudo envku mode prod` | Mengalihkan sistem ke mode Production VPS (mengaktifkan firewall ketat) |
 | `envku pma status` | Memeriksa status instalasi & URL phpMyAdmin |
 | `envku pma open` | Membuka phpMyAdmin langsung di browser desktop lokal |
-| `sudo envku update` | Memperbarui binary Envku CLI langsung dari GitHub Release |
+| `sudo envku update` | Memperbarui binary Envku CLI secara aman (dengan auto-backup & rollback) |
+| `sudo envku uninstall` | Membuka wizard pencopotan (Pilihan: Data Aman vs Purge Bersih) |
+| `sudo envku uninstall --safe` | Menghapus Envku CLI saja, seluruh data web & database tetap aman |
 | `sudo envku daemon install` | Mendaftarkan & mengaktifkan service background Systemd |
 | `sudo envku daemon run` | Menjalankan proses monitoring watchdog di foreground |
 | `envku version` | Melihat versi aplikasi yang sedang terpasang |
 
 ---
 
-## 🗄️ Panduan Akses phpMyAdmin
+## 🗑️ Panduan Uninstall (Pencopotan)
 
-### 1. Pada Komputer Linux Pribadi (Local Mode)
-* Pasang phpMyAdmin melalui menu TUI `[6] phpMyAdmin & Database Access` atau `[2] App & Package Downloader`.
-* phpMyAdmin akan otomatis dikonfigurasi pada port `8080`.
-* Pilih menu `[1] Buka phpMyAdmin di Browser` atau jalankan `envku pma open` di terminal. Sistem akan memanggil browser default Anda (`http://localhost:8080`).
+Envku CLI menyediakan dua opsi pencopotan yang aman:
 
-### 2. Pada Server VPS (Production Mode)
-Di server VPS publik, phpMyAdmin **tidak dibuka bebas ke publik** demi keamanan data. Anda memiliki dua opsi akses aman:
-1. **Opsi 1: SSH Tunnel (Paling Direkomendasikan)**
-   Jalankan dari komputer/laptop Anda:
-   ```bash
-   ssh -N -L 8080:127.0.0.1:8080 user@IP_VPS_ANDA
-   ```
-   Lalu buka browser Anda di `http://localhost:8080`.
-2. **Opsi 2: IP Whitelist Admin**
-   Buka menu `[6] -> [2] Konfigurasi IP Whitelist Admin` di Envku TUI, dan masukkan IP publik koneksi internet Anda. Firewall UFW dan Nginx akan mengizinkan akses hanya dari IP tersebut via `http://IP_VPS:8080`.
+### Opsi 1: Hapus Envku CLI Saja (DATA AMAN - Rekomendasi)
+Hanya menghapus binary `envku` dan background service Systemd.
+* **File website Anda (`/var/www/`)**: ✅ **AMAN (Tidak disentuh)**
+* **Database MySQL (`/var/lib/mysql/`)**: ✅ **AMAN (Tidak disentuh)**
+* **Web Server & PHP (`nginx`, `php`, `redis`)**: ✅ **TETAP BERJALAN NORMAL**
+
+Perintah:
+```bash
+sudo envku uninstall --safe
+# atau via skrip mandiri:
+sudo bash scripts/uninstall.sh --safe
+```
+
+### Opsi 2: Hapus Bersih Seluruhnya (PURGE / COMPLETE WIPE)
+Menghapus binary Envku, service daemon, serta seluruh paket dan direktori data (`/var/www`, `/var/lib/mysql`, `/etc/nginx`, `/etc/php`). Mode ini memerlukan konfirmasi pengetikan kata `HAPUS` untuk mencegah penghapusan yang tidak disengaja.
+
+Perintah:
+```bash
+sudo envku uninstall
+# Pilih opsi [2] Purge
+# atau via skrip:
+sudo bash scripts/uninstall.sh --purge
+```
 
 ---
 
@@ -154,9 +137,11 @@ envku-cli/
 │   ├── sitemanager/        # Generator Virtual Host, /etc/hosts helper & Certbot SSL
 │   ├── servicectl/         # Pengendali service systemd & pembaca log
 │   ├── tui/                # Antarmuka Terminal UI interaktif (ANSI murni)
-│   └── updater/            # Self-update updater otomatis dari GitHub Release
+│   ├── uninstaller/        # Modul uninstaller (Safe Uninstall & Complete Purge)
+│   └── updater/            # Self-update aman dengan validasi ELF, backup & rollback
 ├── scripts/
-│   └── install.sh          # Skrip bootstrap installer dengan pemilihan mode
+│   ├── install.sh          # Skrip bootstrap installer dengan pemilihan mode
+│   └── uninstall.sh        # Skrip mandiri uninstaller (Data Aman / Purge)
 ├── go.mod                  # Definisi Go Module (Zero External Dependency)
 └── README.md               # Dokumentasi lengkap proyek
 ```

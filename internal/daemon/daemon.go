@@ -33,7 +33,7 @@ After=network.target nginx.service mysql.service
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/envku daemon run
+ExecStart=/usr/local/bin/envku-cli daemon run
 Restart=always
 RestartSec=10s
 StandardOutput=journal
@@ -45,6 +45,11 @@ WantedBy=multi-user.target
 
 // InstallService installs the systemd unit file and enables the service
 func (d *Daemon) InstallService() error {
+	// Clean up legacy envku.service if exists
+	_ = exec.Command("systemctl", "stop", "envku").Run()
+	_ = exec.Command("systemctl", "disable", "envku").Run()
+	_ = os.Remove("/etc/systemd/system/envku.service")
+
 	servicePath := config.ServiceFile
 	if err := os.WriteFile(servicePath, []byte(ServiceUnitContent), 0644); err != nil {
 		return fmt.Errorf("failed to write systemd service unit: %w", err)
@@ -54,21 +59,22 @@ func (d *Daemon) InstallService() error {
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
 	}
 
-	if err := exec.Command("systemctl", "enable", "--now", "envku").Run(); err != nil {
-		return fmt.Errorf("failed to enable and start envku service: %w", err)
+	if err := exec.Command("systemctl", "enable", "--now", config.ServiceName).Run(); err != nil {
+		return fmt.Errorf("failed to enable and start %s service: %w", config.ServiceName, err)
 	}
 
 	return nil
 }
 
-// UninstallService disables and removes the envku systemd unit
+// UninstallService disables and removes the envku-cli systemd unit
 func (d *Daemon) UninstallService() error {
+	_ = exec.Command("systemctl", "stop", config.ServiceName).Run()
+	_ = exec.Command("systemctl", "disable", config.ServiceName).Run()
 	_ = exec.Command("systemctl", "stop", "envku").Run()
 	_ = exec.Command("systemctl", "disable", "envku").Run()
 
-	if err := os.Remove(config.ServiceFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove service file: %w", err)
-	}
+	_ = os.Remove(config.ServiceFile)
+	_ = os.Remove("/etc/systemd/system/envku.service")
 
 	return exec.Command("systemctl", "daemon-reload").Run()
 }
@@ -81,7 +87,7 @@ func (d *Daemon) Run() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	log.Println("[Envku Daemon] Background service watchdog started.")
+	log.Println("[Envku CLI Daemon] Background service watchdog started.")
 
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -89,7 +95,7 @@ func (d *Daemon) Run() error {
 	for {
 		select {
 		case sig := <-sigChan:
-			log.Printf("[Envku Daemon] Received signal %v. Shutting down gracefully...", sig)
+			log.Printf("[Envku CLI Daemon] Received signal %v. Shutting down gracefully...", sig)
 			return nil
 		case <-ctx.Done():
 			return nil
@@ -104,7 +110,7 @@ func (d *Daemon) performHealthCheck() {
 	services := d.controller.ListManagedServices()
 	for _, s := range services {
 		if !s.Active {
-			log.Printf("[Envku Watchdog WARNING] Service %s (%s) is INACTIVE!", s.Name, s.UnitName)
+			log.Printf("[Envku CLI Watchdog WARNING] Service %s (%s) is INACTIVE!", s.Name, s.UnitName)
 		}
 	}
 }

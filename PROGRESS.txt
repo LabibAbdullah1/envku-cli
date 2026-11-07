@@ -11,81 +11,31 @@ Repository     : github.com/LabibAbdullah1/envku-cli
 ================================================================================
 [1] EXECUTIVE SUMMARY & STATUS
 ================================================================================
-Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI & PENYEMPURNAAN (100%).
-Aplikasi sekarang mendukung DUA MODE OPERASI:
-  1. PRODUCTION (Server VPS / Cloud Publik): Proteksi Firewall UFW ketat, phpMyAdmin
-     terkunci via whitelist/SSH tunnel, SSL Let's Encrypt, domain FQDN terarah.
-  2. LOCAL DEVELOPMENT (Komputer / Laptop Linux Pribadi & WSL): phpMyAdmin sekali klik
-     langsung terbuka di browser default desktop (xdg-open / wslview), domain pengujian
-     *.test otomatis dipetakan ke /etc/hosts, firewall fleksibel.
+Status Keseluruhan: SELESAI TAHAP IMPLEMENTASI & PENYEMPURNAAN LENGKAP (100%).
+Aplikasi sekarang telah teruji secara komprehensif dengan penambahan:
+  1. DUAL ENVIRONMENT MODE (Production VPS vs Local Linux Pribadi).
+  2. PHPMYADMIN & BROWSER LAUNCHER:
+     - Local: Sekali klik buka di browser lokal (xdg-open/wslview).
+     - Prod: Terlindungi UFW firewall dan IP whitelist.
+  3. SAFE ATOMIC SELF-UPDATER:
+     - Validasi ELF/PE magic header, minimum file size (>500KB).
+     - Auto-backup binary lama (envku.bak).
+     - Auto-rollback instan jika proses penimpaan gagal.
+     - Penanganan aman systemd daemon (stop sementara & restart otomatis).
+  4. UNINSTALL MANAGER (PILIHAN DATA AMAN VS PURGE):
+     - Mode Safe: Copot Envku CLI & daemon saja; file web (/var/www), database,
+       Nginx, dan PHP TETAP 100% AMAN & AKTIF.
+     - Mode Purge: Hapus bersih seluruh sistem dengan konfirmasi ganda ('HAPUS').
+     - Tersedia via CLI 'sudo envku uninstall', Menu TUI [X], dan skrip mandiri
+       'scripts/uninstall.sh'.
 
 ================================================================================
-[2] FITUR-FITUR TERBARU YANG DITAMBAHKAN
+[2] VERIFIKASI PENGUJIAN
 ================================================================================
-
-1. DUAL ENVIRONMENT MODE (LOCAL VS PRODUCTION)
-   - [x] Konfigurasi persistent disimpan di /etc/envku-cli/config.json (atau ~/.config/...).
-   - [x] Skrip installer (scripts/install.sh) menyediakan dialog interaktif dan flag
-         (--production atau --local) saat instalasi awal.
-   - [x] Subcommand CLI 'envku mode' dan 'sudo envku mode [local|prod]' untuk melihat
-         atau beralih profil sewaktu-waktu.
-   - [x] Menu TUI '[M] Switch Environment Mode' dengan deskripsi dan auto-apply profil firewall.
-
-2. PHPMYADMIN WEB DATABASE MANAGER (internal/installer/phpmyadmin.go)
-   - [x] Download resmi tarball phpMyAdmin stable tanpa dependensi Apache.
-   - [x] Auto-generate Blowfish Secret 32-karakter acak di config.inc.php.
-   - [x] Server block Nginx mandiri pada port 8080 (tidak bentrok dengan situs utama).
-   - [x] Di mode Local: Sekali klik langsung memanggil browser lokal (xdg-open/wslview).
-   - [x] Di mode Production: Port 8080 dilindungi oleh Firewall UFW dan Nginx IP Whitelist.
-   - [x] Subcommand CLI 'envku pma status' dan 'envku pma open'.
-
-3. FIREWALL UFW CONTROLLER (internal/firewall/)
-   - [x] Profil Production: Default deny incoming, izinkan 22, 80, 443; blokir port database
-         MySQL (3306), Redis (6379), dan phpMyAdmin (8080) dari publik umum.
-   - [x] Manajemen IP Whitelist Admin khusus untuk akses aman phpMyAdmin.
-   - [x] Profil Local: Membuka akses loopback/LAN agar tools database desktop (DBeaver, TablePlus)
-         bisa terhubung tanpa hambatan.
-
-4. BROWSER LAUNCHER & DESKTOP DETECTION (internal/config/browser.go)
-   - [x] Deteksi display GUI Linux (X11 / Wayland / WSL).
-   - [x] Dukungan pemanggilan browser: xdg-open, wslview, google-chrome, firefox, dsb.
-
-5. SITE MANAGER ENHANCEMENTS & LOCAL DOMAIN RESOLVER (internal/sitemanager/)
-   - [x] Otomatis mendaftarkan domain *.test ke /etc/hosts (127.0.0.1) di mode local.
-   - [x] Pembersihan entri /etc/hosts saat virtual host dihapus.
-   - [x] Proteksi Certbot: Mencegah permintaan SSL Let's Encrypt untuk domain lokal/internal.
-   - [x] Opsi '[O] Buka Domain di Browser' langsung dari menu Site Manager.
-
-================================================================================
-[3] FITUR LAIN YANG SUDAH TERPASANG
-================================================================================
-- [x] Nginx Web Server Installer & Syntax Validator.
-- [x] MySQL Database Server Installer & Systemd integration.
-- [x] Redis In-Memory Cache Server (Official GPG Keyring packages.redis.io).
-- [x] PHP Multi-Version Installer (8.2, 8.3, 8.4, 8.5) via Sury repository.
-- [x] Node.js & NVM Bootstrap.
-- [x] php.ini Parser & Atomic Editor dengan Auto-Backup dan Auto-Rollback.
-- [x] Site Manager: PHP-FPM, Node.js Reverse Proxy, Static SPA, Certbot SSL.
-- [x] Service Lifecycle Controller & Journalctl Log Inspector.
-- [x] Background Daemon & Watchdog Health Check (Systemd).
-- [x] Self-Update Manager langsung dari GitHub Releases.
-
-================================================================================
-[4] CARA MENJALANKAN & MENGUJI
-================================================================================
-A. Di Linux Desktop / Laptop Pribadi:
-   1. Install:
-      curl -fsSL https://raw.githubusercontent.com/LabibAbdullah1/envku-cli/main/scripts/install.sh | sudo bash -s -- --local
-   2. Jalankan TUI:
-      sudo envku
-   3. Pasang phpMyAdmin dan buka di browser:
-      Pilih menu [6] -> [1] Buka phpMyAdmin di Browser (atau 'envku pma open')
-
-B. Di Server VPS / Cloud:
-   1. Install:
-      curl -fsSL https://raw.githubusercontent.com/LabibAbdullah1/envku-cli/main/scripts/install.sh | sudo bash -s -- --production
-   2. Pasang firewall dan amankan server:
-      sudo envku mode production
+- [x] 'go test ./...' : Lulus 100% (internal/config, internal/sitemanager).
+- [x] Cross-compilation Linux (GOOS=linux GOARCH=amd64) : Berhasil tanpa error.
+- [x] Cross-compilation Windows (GOOS=windows GOARCH=amd64) : Berhasil.
+- [x] Zero third-party dependencies di go.mod tetap terjaga murni.
 
 ================================================================================
 DOKUMEN INI ADALAH SINGLE SOURCE OF TRUTH (SSOT) UNTUK STATUS & HANDOVER PROYEK.

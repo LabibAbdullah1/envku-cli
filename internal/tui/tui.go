@@ -54,10 +54,11 @@ func Run() error {
 		} else {
 			fmt.Println("[U] 🔍 Periksa / Update Envku CLI")
 		}
+		fmt.Println("[X] 🗑️  Uninstall Envku CLI (Pilihan Data Aman / Purge)")
 		fmt.Println("--------------------------------------------------")
 		fmt.Println("[0] 🚪 Exit")
 		fmt.Println("==================================================")
-		fmt.Print("Select an option [0-6, M, U]: ")
+		fmt.Print("Select an option [0-6, M, U, X]: ")
 
 		choice, err := reader.ReadString('\n')
 		if err != nil {
@@ -83,6 +84,8 @@ func Run() error {
 			runEnvironmentMenu(reader)
 		case "U":
 			handleTUIUpdate(reader)
+		case "X":
+			runUninstallMenu(reader)
 		case "0":
 			clearScreen()
 			fmt.Println("Thank you for using Envku CLI. Goodbye!")
@@ -137,11 +140,11 @@ func handleTUIUpdate(reader *bufio.Reader) {
 		return
 	}
 
-	fmt.Printf("\n[*] Mengunduh dan memasang v%s dari GitHub...\n", info.LatestVersion)
+	fmt.Printf("\n[*] Mengunduh dan memasang v%s dari GitHub secara aman...\n", info.LatestVersion)
 	if err := updater.PerformSelfUpdate(info); err != nil {
 		fmt.Printf("[-] Pembaruan gagal: %v\n", err)
 		if !installer.IsRoot() {
-			fmt.Println("[-] Tips: Menimpa binary sistem membutuhkan hak akses root. Jalankan: sudo envku update")
+			fmt.Println("[-] Tips: Menimpa binary sistem membutuhkan hak akses root. Jalankan: sudo envku-cli update")
 		}
 	} else {
 		fmt.Printf("==================================================\n")
@@ -166,7 +169,7 @@ func renderDashboard(ctl *servicectl.Controller, inst *installer.Installer) {
 
 	if !installer.IsRoot() {
 		fmt.Println("  ⚠️  Notice: Running as non-root user.")
-		fmt.Println("     Run with 'sudo envku' to manage/install system services.")
+		fmt.Println("     Run with 'sudo envku-cli' to manage/install system services.")
 		fmt.Println("--------------------------------------------------")
 	}
 	if cachedUpdateInfo != nil && cachedUpdateInfo.Available {
