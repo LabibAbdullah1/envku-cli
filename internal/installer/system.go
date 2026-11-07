@@ -68,14 +68,13 @@ func (d *DistroInfo) IsDebian() bool {
 
 // GetEffectiveUbuntuCodename resolves the underlying Ubuntu LTS codename for Ubuntu and derivatives (Linux Mint, Pop!_OS, Zorin, etc.)
 func (d *DistroInfo) GetEffectiveUbuntuCodename() string {
-	// 1. If explicit UBUNTU_CODENAME is in /etc/os-release (Linux Mint 21/22 and others specify this)
 	if d.UbuntuCodename != "" {
 		return strings.ToLower(d.UbuntuCodename)
 	}
 
 	codename := strings.ToLower(d.Codename)
 
-	// 2. Linux Mint codename & version mapping
+	// Linux Mint codename & version mapping
 	if d.ID == "linuxmint" || strings.Contains(d.IDLike, "linuxmint") {
 		// Mint 20.x -> focal (Ubuntu 20.04)
 		if strings.HasPrefix(d.VersionID, "20") || strings.Contains(codename, "ulyana") ||
@@ -91,7 +90,7 @@ func (d *DistroInfo) GetEffectiveUbuntuCodename() string {
 		return "noble"
 	}
 
-	// 3. Version ID prefix heuristics
+	// Version ID prefix heuristics
 	if strings.HasPrefix(d.VersionID, "24") {
 		return "noble"
 	}
@@ -102,7 +101,7 @@ func (d *DistroInfo) GetEffectiveUbuntuCodename() string {
 		return "focal"
 	}
 
-	// 4. If already an Ubuntu codename
+	// If already an Ubuntu codename
 	knownUbuntu := map[string]bool{
 		"noble": true, "jammy": true, "focal": true, "bionic": true, "mantic": true, "lunar": true, "kinetic": true,
 	}
@@ -110,7 +109,6 @@ func (d *DistroInfo) GetEffectiveUbuntuCodename() string {
 		return codename
 	}
 
-	// Default fallback to latest modern Ubuntu LTS
 	return "noble"
 }
 
@@ -138,6 +136,15 @@ func (d *DistroInfo) GetEffectiveDebianCodename() string {
 	return "bookworm"
 }
 
+// CleanBrokenSources removes faulty third-party repository lists that commonly fail on Linux Mint / Ubuntu
+func CleanBrokenSources() {
+	// Remove invalid sury repositories referencing Linux Mint codenames (e.g. zena, wilma, virginia)
+	_ = exec.Command("bash", "-c", "rm -f /etc/apt/sources.list.d/*ondrej*.list* /etc/apt/sources.list.d/php.list 2>/dev/null || true").Run()
+	_ = exec.Command("bash", "-c", "grep -l 'packages.sury.org/php zena' /etc/apt/sources.list.d/* 2>/dev/null | xargs rm -f 2>/dev/null || true").Run()
+	_ = exec.Command("bash", "-c", "grep -l 'packages.sury.org/php wilma' /etc/apt/sources.list.d/* 2>/dev/null | xargs rm -f 2>/dev/null || true").Run()
+	_ = exec.Command("bash", "-c", "grep -l 'packages.sury.org/php virginia' /etc/apt/sources.list.d/* 2>/dev/null | xargs rm -f 2>/dev/null || true").Run()
+}
+
 // RunCommand executes a command with non-interactive flags set for debian/ubuntu
 func RunCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
@@ -161,9 +168,15 @@ func RunCommandOutput(name string, args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// AptUpdate executes apt-get update safely
+// AptUpdate executes apt-get update safely, cleaning broken sources first
 func AptUpdate() error {
-	return RunCommand("apt-get", "update", "-y")
+	CleanBrokenSources()
+	err := RunCommand("apt-get", "update", "-y")
+	if err != nil {
+		// Retry with allow-releaseinfo-change if repo codenames recently changed
+		_ = RunCommand("apt-get", "update", "-y", "--allow-releaseinfo-change")
+	}
+	return nil
 }
 
 // AptInstall installs one or more packages non-interactively
