@@ -58,7 +58,7 @@ func runSiteMenu(reader *bufio.Reader) {
 		fmt.Println("--------------------------------------------------")
 		fmt.Println("[A] Add New Site (Wizard)")
 		if config.CanOpenBrowser() {
-			fmt.Println("[O] Buka Domain di Browser Lokal (xdg-open)")
+			fmt.Println("[B] Buka Domain di Browser Lokal (xdg-open)")
 		}
 		fmt.Println("[E] Enable a Site")
 		fmt.Println("[D] Disable a Site")
@@ -74,16 +74,26 @@ func runSiteMenu(reader *bufio.Reader) {
 		switch choice {
 		case "A":
 			wizardNewSite(mgr, reader)
-		case "O":
+		case "B", "O":
 			fmt.Print("Masukkan nama domain yang ingin dibuka di browser: ")
 			dom, _ := reader.ReadString('\n')
 			dom = strings.TrimSpace(dom)
 			if dom != "" {
-				fmt.Printf("[*] Membuka %s di browser lokal...\n", dom)
-				if err := mgr.OpenSiteInBrowser(dom); err != nil {
-					fmt.Printf("[-] Gagal membuka browser: %v\n", err)
+				cleanDom := strings.TrimPrefix(strings.TrimPrefix(dom, "http://"), "https://")
+				cleanDom = strings.TrimRight(cleanDom, "/")
+				scheme := "http"
+				if mgr.HasSSL(cleanDom) {
+					scheme = "https"
+				}
+				url := fmt.Sprintf("%s://%s", scheme, cleanDom)
+
+				fmt.Printf("[*] Membuka URL di browser: %s ...\n", url)
+				if err := mgr.OpenSiteInBrowser(cleanDom); err != nil {
+					fmt.Printf("[-] Gagal membuka browser otomatis: %v\n", err)
+					fmt.Printf("[i] Silakan buka browser Anda dan akses: %s\n", url)
 				} else {
-					fmt.Printf("[+] Halaman %s telah dibuka di browser!\n", dom)
+					fmt.Printf("[+] Perintah browser terkirim untuk: %s\n", url)
+					fmt.Printf("[i] Jika jendela browser tidak terbuka otomatis, akses manual: %s\n", url)
 				}
 				waitEnter(reader)
 			}
@@ -291,11 +301,19 @@ func wizardNewSite(mgr *sitemanager.Manager, reader *bufio.Reader) {
 		}
 
 		if config.CanOpenBrowser() {
+			url := fmt.Sprintf("http://%s", domain)
 			fmt.Print("\nBuka situs baru di browser lokal sekarang? [Y/n]: ")
 			openNow, _ := reader.ReadString('\n')
 			openNow = strings.ToLower(strings.TrimSpace(openNow))
 			if openNow == "" || openNow == "y" || openNow == "yes" {
-				_ = mgr.OpenSiteInBrowser(domain)
+				fmt.Printf("[*] Membuka URL di browser: %s ...\n", url)
+				if err := mgr.OpenSiteInBrowser(domain); err != nil {
+					fmt.Printf("[-] Gagal membuka browser otomatis: %v\n", err)
+					fmt.Printf("[i] Akses URL secara manual: %s\n", url)
+				} else {
+					fmt.Printf("[+] Perintah browser terkirim untuk: %s\n", url)
+					fmt.Printf("[i] Jika jendela browser tidak terbuka otomatis, akses: %s\n", url)
+				}
 			}
 		}
 	}

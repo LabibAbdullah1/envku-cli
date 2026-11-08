@@ -229,11 +229,16 @@ func (m *Manager) DeleteSite(domain string) error {
 
 // OpenSiteInBrowser opens the site URL in the default local desktop browser
 func (m *Manager) OpenSiteInBrowser(domain string) error {
+	cleanDomain := strings.TrimSpace(domain)
+	cleanDomain = strings.TrimPrefix(cleanDomain, "http://")
+	cleanDomain = strings.TrimPrefix(cleanDomain, "https://")
+	cleanDomain = strings.TrimRight(cleanDomain, "/")
+
 	scheme := "http"
-	if m.HasSSL(domain) {
+	if m.HasSSL(cleanDomain) {
 		scheme = "https"
 	}
-	url := fmt.Sprintf("%s://%s", scheme, domain)
+	url := fmt.Sprintf("%s://%s", scheme, cleanDomain)
 	return config.OpenBrowser(url)
 }
 
