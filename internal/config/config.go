@@ -16,7 +16,7 @@ import (
 // Default path configurations and global settings for Envku CLI
 var (
 	AppName    = "envku-cli"
-	AppVersion = "1.0.0"
+	AppVersion = "2.0.0"
 )
 
 const (
